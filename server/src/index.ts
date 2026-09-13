@@ -6,17 +6,29 @@ import {
   isAllowedOrigin,
   isAuthenticated,
 } from "./auth";
+import { CmuxEventStream } from "./cmux-events";
 import { loadConfig, type RuntimeConfig } from "./config";
-import { health } from "./health";
-import { createWebSocketHandler } from "./ws";
+import { createHealthRoutes } from "./health";
+import { createWebSocketData, createWebSocketHandler } from "./ws";
 
 const clientDistPath = join(import.meta.dir, "../../client/dist");
 
-export function startServer(config: RuntimeConfig) {
+export interface RunningServer {
+  port: number;
+  stop(closeActiveConnections?: boolean): Promise<void>;
+}
+
+export function startServer(config: RuntimeConfig): RunningServer {
   const app = new Hono();
-  app.route("/", health);
+  app.route("/", createHealthRoutes(config));
   app.route("/", createAuthRoutes(config));
   app.use("/*", serveStatic({ root: clientDistPath }));
+
+  const eventStream = new CmuxEventStream({
+    socketPath: config.socketPath,
+    socketPassword: config.socketPassword,
+  });
+  void eventStream.start().catch(() => undefined);
 
   const server = Bun.serve({
     hostname: config.hostname,
@@ -29,19 +41,25 @@ export function startServer(config: RuntimeConfig) {
         ) {
           return new Response("Unauthorized", { status: 401 });
         }
-        return bunServer.upgrade(request, { data: {} as never })
+        return bunServer.upgrade(request, { data: createWebSocketData() })
           ? undefined
           : new Response("WebSocket upgrade failed", { status: 400 });
       }
       return app.fetch(request, bunServer);
     },
-    websocket: createWebSocketHandler(),
+    websocket: createWebSocketHandler({ config, eventStream }),
   });
 
   console.log(
     `[server] cmux-remote bridge running on http://${config.hostname}:${server.port}`,
   );
-  return server;
+  return {
+    port: server.port ?? config.port,
+    async stop(closeActiveConnections) {
+      eventStream.stop();
+      await server.stop(closeActiveConnections);
+    },
+  };
 }
 
 if (import.meta.main) {
