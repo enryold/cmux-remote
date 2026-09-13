@@ -1,97 +1,239 @@
-import { Socket } from "net";
-import { homedir } from "os";
-import { join } from "path";
+import { JsonLineConnection } from "./cmux-connection";
+import { resolveSocketPath } from "./config";
 
-const DEFAULT_SOCKET_PATH = join(
-  homedir(),
-  "Library/Application Support/cmux/cmux.sock"
-);
+export interface CmuxClientOptions {
+  socketPath: string;
+  socketPassword?: string | null;
+  requestTimeoutMs?: number;
+  maxPending?: number;
+  onStateChange?: (connected: boolean) => void;
+}
+
+interface PendingRequest {
+  resolve(value: unknown): void;
+  reject(error: Error): void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
+interface ResponseEnvelope {
+  id: string;
+  ok: boolean;
+  result?: unknown;
+  error?: unknown;
+}
+
+export class CmuxRequestError extends Error {
+  constructor(readonly code: string, message = code) {
+    super(`${code}: ${message}`);
+    this.name = "CmuxRequestError";
+  }
+}
+
+function responseEnvelope(value: unknown): ResponseEnvelope | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  const frame = value as Record<string, unknown>;
+  if (typeof frame.id !== "string" || typeof frame.ok !== "boolean") return null;
+  return {
+    id: frame.id,
+    ok: frame.ok,
+    result: frame.result,
+    error: frame.error,
+  };
+}
+
+function cmuxError(value: unknown): CmuxRequestError {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return new CmuxRequestError("cmux_error", "cmux request failed");
+  }
+  const error = value as Record<string, unknown>;
+  const code =
+    typeof error.code === "string" && /^[a-z0-9_.-]{1,64}$/i.test(error.code)
+      ? error.code
+      : "cmux_error";
+  const message =
+    typeof error.message === "string"
+      ? error.message.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 256)
+      : "cmux request failed";
+  return new CmuxRequestError(code, message);
+}
 
 export class CmuxClient {
-  private socket: Socket | null = null;
-  private buffer = "";
-  private onMessage: ((msg: string) => void) | null = null;
-  private socketPath: string;
+  readonly #options: Required<
+    Pick<CmuxClientOptions, "socketPath" | "requestTimeoutMs" | "maxPending">
+  > &
+    Omit<CmuxClientOptions, "socketPath" | "requestTimeoutMs" | "maxPending">;
+  readonly #pending = new Map<string, PendingRequest>();
+  #connection: JsonLineConnection | null = null;
+  #connectPromise: Promise<void> | null = null;
+  #connected = false;
+  #generation = 0;
 
-  constructor(socketPath?: string) {
-    this.socketPath = socketPath ?? process.env.CMUX_SOCKET ?? DEFAULT_SOCKET_PATH;
+  constructor(options?: CmuxClientOptions) {
+    this.#options = {
+      socketPath: options?.socketPath ?? resolveSocketPath(process.env),
+      socketPassword: options?.socketPassword ?? null,
+      requestTimeoutMs: options?.requestTimeoutMs ?? 10_000,
+      maxPending: options?.maxPending ?? 64,
+      onStateChange: options?.onStateChange,
+    };
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.socket = new Socket();
+    if (this.isConnected) return Promise.resolve();
+    if (this.#connectPromise) return this.#connectPromise;
 
-        const timeout = setTimeout(() => {
-          this.socket?.destroy();
-          reject(new Error("Connection to cmux socket timed out (30s)"));
-        }, 30_000);
-
-        this.socket.on("error", (err) => {
-          clearTimeout(timeout);
-          console.error(`[cmux-client] Socket error:`, err.message);
-          this.socket?.destroy();
-          this.socket = null;
-          reject(err);
-        });
-
-        this.socket.on("close", () => {
-          console.log("[cmux-client] Socket closed");
-          this.socket = null;
-        });
-
-        this.socket.on("data", (data) => {
-          this.buffer += data.toString();
-          const lines = this.buffer.split("\n");
-          this.buffer = lines.pop() ?? "";
-          for (const line of lines) {
-            if (line.trim()) {
-              this.onMessage?.(line);
-            }
-          }
-        });
-
-        this.socket.connect(this.socketPath, () => {
-          clearTimeout(timeout);
-          console.log(`[cmux-client] Connected to ${this.socketPath}`);
-          resolve();
-        });
-      } catch (err) {
-        this.socket?.destroy();
-        this.socket = null;
-        reject(err);
-      }
+    const generation = this.#generation;
+    this.#connectPromise = this.#open(generation).finally(() => {
+      this.#connectPromise = null;
     });
+    return this.#connectPromise;
   }
 
-  send(message: string): void {
-    if (!this.socket) {
-      throw new Error("Not connected to cmux socket");
-    }
-    this.socket.write(message + "\n");
-  }
-
-  setMessageHandler(handler: (msg: string) => void): void {
-    this.onMessage = handler;
+  async request<T = unknown>(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<T> {
+    await this.connect();
+    return (await this.#sendRequest(method, params)) as T;
   }
 
   disconnect(): void {
-    this.socket?.destroy();
-    this.socket = null;
+    this.#generation += 1;
+    this.#dropConnection(new CmuxRequestError("cmux_disconnected"));
   }
 
   get isConnected(): boolean {
-    return this.socket !== null && !this.socket.destroyed;
+    return this.#connected && this.#connection?.isOpen === true;
   }
 
   async checkConnection(): Promise<boolean> {
     try {
-      if (this.isConnected) return true;
       await this.connect();
-      this.disconnect();
       return true;
     } catch {
       return false;
+    } finally {
+      this.disconnect();
     }
+  }
+
+  async #open(generation: number): Promise<void> {
+    let connection: JsonLineConnection;
+    try {
+      connection = await JsonLineConnection.connect({
+        socketPath: this.#options.socketPath,
+      });
+    } catch (error) {
+      throw error instanceof Error
+        ? error
+        : new CmuxRequestError("cmux_disconnected");
+    }
+
+    if (generation !== this.#generation) {
+      connection.close();
+      throw new CmuxRequestError("cmux_disconnected");
+    }
+
+    this.#connection = connection;
+    void this.#readFrames(connection);
+
+    try {
+      if (this.#options.socketPassword) {
+        const result = await this.#sendRequest("auth.login", {
+          password: this.#options.socketPassword,
+        });
+        if (
+          typeof result !== "object" ||
+          result === null ||
+          !("authenticated" in result) ||
+          result.authenticated !== true
+        ) {
+          throw new CmuxRequestError("cmux_auth_failed");
+        }
+      }
+      if (generation !== this.#generation) {
+        throw new CmuxRequestError("cmux_disconnected");
+      }
+      this.#connected = true;
+      this.#options.onStateChange?.(true);
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? error
+          : new CmuxRequestError("cmux_disconnected");
+      this.#dropConnection(reason, connection);
+      throw reason;
+    }
+  }
+
+  #sendRequest(
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<unknown> {
+    const connection = this.#connection;
+    if (!connection?.isOpen) {
+      return Promise.reject(new CmuxRequestError("cmux_disconnected"));
+    }
+    if (this.#pending.size >= this.#options.maxPending) {
+      return Promise.reject(new CmuxRequestError("cmux_busy"));
+    }
+
+    const id = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.#pending.delete(id);
+        reject(new CmuxRequestError("cmux_timeout"));
+      }, this.#options.requestTimeoutMs);
+      this.#pending.set(id, { resolve, reject, timeout });
+
+      try {
+        connection.write({ id, method, params });
+      } catch {
+        clearTimeout(timeout);
+        this.#pending.delete(id);
+        reject(new CmuxRequestError("cmux_disconnected"));
+      }
+    });
+  }
+
+  async #readFrames(connection: JsonLineConnection): Promise<void> {
+    try {
+      while (this.#connection === connection) {
+        const frame = responseEnvelope(await connection.read());
+        if (!frame) continue;
+        const pending = this.#pending.get(frame.id);
+        if (!pending) continue;
+
+        clearTimeout(pending.timeout);
+        this.#pending.delete(frame.id);
+        if (frame.ok) pending.resolve(frame.result);
+        else pending.reject(cmuxError(frame.error));
+      }
+    } catch (error) {
+      this.#dropConnection(
+        error instanceof Error
+          ? error
+          : new CmuxRequestError("cmux_disconnected"),
+        connection,
+      );
+    }
+  }
+
+  #dropConnection(error: Error, expected?: JsonLineConnection): void {
+    if (expected && this.#connection !== expected) return;
+    const wasConnected = this.#connected;
+    const connection = this.#connection;
+    this.#connection = null;
+    this.#connected = false;
+    connection?.close(error);
+
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.#pending.clear();
+    if (wasConnected) this.#options.onStateChange?.(false);
   }
 }
