@@ -45,4 +45,27 @@ describe("WebSocket upgrade boundary", () => {
       await server.stop(true);
     }
   });
+
+  it("applies browser hardening headers to served app responses", async () => {
+    const server = startServer({
+      hostname: "127.0.0.1",
+      port: 0,
+      remoteToken: "a".repeat(32),
+      publicOrigin: null,
+      socketPath: "/tmp/cmux-test.sock",
+      socketPassword: null,
+    });
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/`);
+      expect(response.headers.get("content-security-policy")).toContain(
+        "frame-ancestors 'none'",
+      );
+      expect(response.headers.get("x-frame-options")).toBe("DENY");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    } finally {
+      await server.stop(true);
+    }
+  });
 });

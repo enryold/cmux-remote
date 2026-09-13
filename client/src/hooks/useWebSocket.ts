@@ -90,6 +90,24 @@ export function useWebSocket({
         return;
       }
       scheduleRetry();
+      void fetch("/auth/status", {
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const body = (await response.json()) as unknown;
+          if (
+            typeof body === "object" &&
+            body !== null &&
+            "authenticated" in body &&
+            body.authenticated === false
+          ) {
+            clearRetry();
+            onUnauthorizedRef.current?.();
+          }
+        })
+        .catch(() => undefined);
     };
     socket.onerror = () => socket.close();
   }, [clearRetry, enabled, url]);

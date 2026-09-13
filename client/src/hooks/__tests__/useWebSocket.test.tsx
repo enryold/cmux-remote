@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeWebSocket } from "../../test/fake-websocket";
 import { reconnectDelay, useWebSocket } from "../useWebSocket";
@@ -9,6 +9,14 @@ describe("useWebSocket", () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal("WebSocket", FakeWebSocket);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ authenticated: true }), {
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
     vi.spyOn(Math, "random").mockReturnValue(0.5);
   });
 
@@ -68,6 +76,26 @@ describe("useWebSocket", () => {
     act(() => vi.advanceTimersByTime(60_000));
     expect(onUnauthorized).toHaveBeenCalledOnce();
     expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it("detects an expired cookie when an upgrade is rejected before WebSocket open", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ authenticated: false }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const onUnauthorized = vi.fn();
+    renderHook(() =>
+      useWebSocket({
+        url: "ws://test/ws",
+        enabled: true,
+        onMessage: vi.fn(),
+        onUnauthorized,
+      }),
+    );
+
+    act(() => FakeWebSocket.instances[0]?.closeFromServer(1006));
+    await waitFor(() => expect(onUnauthorized).toHaveBeenCalledOnce());
   });
 
   it("marks the bridge disconnected while offline and reconnects on online", () => {

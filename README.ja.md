@@ -2,6 +2,9 @@
 
 [English](README.md)
 
+> **注意:** この文書は upstream prototype の履歴資料です。現在の導入・セキュリティ手順は
+> [English README](README.md) を参照してください。以下の手順でサービスを公開しないでください。
+
 [cmux](https://cmux.dev) のリモートターミナルビューア — iPhone PWA から cmux ワークスペースにアクセスできます。
 
 ## 概要

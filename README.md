@@ -1,7 +1,5 @@
 # cmux-remote
 
-[日本語](README.ja.md)
-
 An open-source, mobile-first command center for terminal surfaces running in
 [cmux](https://cmux.dev). It keeps cmux as the primary workspace and gives an iPhone a focused way
 to discover terminals, read recent output, type, and recover after network or background changes.
@@ -158,6 +156,9 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Architecture and milestone specification](docs/superpowers/specs/2026-09-13-cmux-remote-command-center-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-09-13-reliable-mobile-terminal.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
+
+The older files under `docs/` and `README.ja.md` describe the upstream prototype and are retained
+for history; they are not current deployment or security instructions.
 
 ## License
 

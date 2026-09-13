@@ -20,6 +20,16 @@ export interface RunningServer {
 
 export function startServer(config: RuntimeConfig): RunningServer {
   const app = new Hono();
+  app.use("*", async (context, next) => {
+    await next();
+    context.header(
+      "Content-Security-Policy",
+      "default-src 'self'; base-uri 'none'; connect-src 'self'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self'; frame-ancestors 'none'; form-action 'self'",
+    );
+    context.header("Referrer-Policy", "no-referrer");
+    context.header("X-Content-Type-Options", "nosniff");
+    context.header("X-Frame-Options", "DENY");
+  });
   app.route("/", createHealthRoutes(config));
   app.route("/", createAuthRoutes(config));
   app.use("/*", serveStatic({ root: clientDistPath }));
