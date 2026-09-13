@@ -8,6 +8,8 @@ const baseConfig: RuntimeConfig = {
   port: 3456,
   remoteToken: "a".repeat(32),
   publicOrigin: null,
+  tailscaleCapability: null,
+  pairingCode: null,
   socketPath: "/tmp/cmux-test.sock",
   socketPassword: null,
 };

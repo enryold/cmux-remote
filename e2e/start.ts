@@ -8,6 +8,8 @@ const server = startServer({
   port: 3457,
   remoteToken: E2E_TOKEN,
   publicOrigin: null,
+  tailscaleCapability: null,
+  pairingCode: null,
   socketPath: fake.socketPath,
   socketPassword: "e2e-cmux-password",
 });

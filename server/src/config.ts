@@ -1,12 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { randomInt } from "node:crypto";
 
 export interface RuntimeConfig {
   hostname: string;
   port: number;
   remoteToken: string;
   publicOrigin: string | null;
+  tailscaleCapability: string | null;
+  pairingCode: string | null;
   socketPath: string;
   socketPassword: string | null;
 }
@@ -24,14 +27,54 @@ export function loadConfig(
     throw new Error("PORT must be an integer from 1 through 65535");
   }
 
+  const hostname = env.HOST || "127.0.0.1";
+  const publicOrigin = parseExactOrigin(env.CMUX_REMOTE_ORIGIN);
+  const tailscaleCapability = env.CMUX_REMOTE_TAILSCALE_CAPABILITY || null;
+  const configuredPairingCode = env.CMUX_REMOTE_PAIRING_CODE;
+
+  if (configuredPairingCode && !tailscaleCapability) {
+    throw new Error("CMUX_REMOTE_PAIRING_CODE requires pairing mode");
+  }
+
+  let pairingCode: string | null = null;
+  if (tailscaleCapability) {
+    if (!isCapabilityName(tailscaleCapability)) {
+      throw new Error(
+        "CMUX_REMOTE_TAILSCALE_CAPABILITY must use the domain/path format",
+      );
+    }
+    if (hostname !== "127.0.0.1") {
+      throw new Error("Tailscale pairing requires HOST=127.0.0.1");
+    }
+    if (!publicOrigin || new URL(publicOrigin).protocol !== "https:") {
+      throw new Error("Tailscale pairing requires an HTTPS CMUX_REMOTE_ORIGIN");
+    }
+    if (configuredPairingCode && !/^\d{6}$/.test(configuredPairingCode)) {
+      throw new Error("CMUX_REMOTE_PAIRING_CODE must contain exactly six digits");
+    }
+    pairingCode =
+      configuredPairingCode ?? randomInt(1_000_000).toString().padStart(6, "0");
+  }
+
   return {
-    hostname: env.HOST || "127.0.0.1",
+    hostname,
     port,
     remoteToken,
-    publicOrigin: parseExactOrigin(env.CMUX_REMOTE_ORIGIN),
+    publicOrigin,
+    tailscaleCapability,
+    pairingCode,
     socketPath: resolveSocketPath(env),
     socketPassword: env.CMUX_SOCKET_PASSWORD || null,
   };
+}
+
+function isCapabilityName(value: string): boolean {
+  return (
+    value.length <= 255 &&
+    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}\/[A-Za-z0-9][A-Za-z0-9._~/-]*$/.test(
+      value,
+    )
+  );
 }
 
 function parseExactOrigin(value: string | undefined): string | null {
