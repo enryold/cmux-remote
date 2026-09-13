@@ -1,34 +1,334 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #10131a;
+  color: #e5e7eb;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 html,
-body {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-  background-color: #1a1a2e;
-  color: #e0e0e0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-/* Safe area padding for iPhone notch / Dynamic Island */
-body {
-  padding-top: env(safe-area-inset-top);
-}
-
+body,
 #root {
+  width: 100%;
   height: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
-/* Prevent pull-to-refresh */
 body {
   overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: var(--app-height, 100dvh);
+  min-height: 0;
+  padding-top: env(safe-area-inset-top);
+  background: #10131a;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) minmax(0, auto) minmax(64px, 1fr);
+  align-items: center;
+  min-height: 48px;
+  padding: 0 8px;
+  border-bottom: 1px solid #272b35;
+  background: #171b24;
+}
+
+.app-header strong {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: #b9cdf9;
+  cursor: pointer;
+}
+
+.app-header button:first-child {
+  justify-self: start;
+  font-size: 28px;
+}
+
+.app-header button:last-child {
+  justify-self: end;
+  font-size: 13px;
+}
+
+.header-spacer {
+  width: 64px;
+}
+
+.dashboard {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px max(12px, env(safe-area-inset-left)) 24px max(12px, env(safe-area-inset-right));
+  -webkit-overflow-scrolling: touch;
+}
+
+.dashboard-heading,
+.workspace-group h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-heading h1 {
+  margin: 0;
+  font-size: 21px;
+}
+
+.connection-label {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.connection-connected {
+  color: #70d69b;
+}
+
+.workspace-group {
+  margin-top: 20px;
+}
+
+.workspace-group h2 {
+  margin: 0 0 6px;
+  color: #9ca3af;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-list {
+  overflow: hidden;
+  border: 1px solid #292e39;
+  border-radius: 10px;
+}
+
+.terminal-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 54px;
+  padding: 7px 10px;
+  border: 0;
+  border-bottom: 1px solid #292e39;
+  background: #171b24;
+  text-align: left;
+}
+
+.terminal-row:last-child {
+  border-bottom: 0;
+}
+
+.surface-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 11px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.surface-dot.selected {
+  background: #70d69b;
+}
+
+.terminal-row-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.terminal-row-text strong {
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-row-text small,
+.empty-row {
+  color: #8b93a2;
+  font-size: 12px;
+}
+
+.empty-row {
+  margin: 0;
+  padding: 12px 10px;
+  border: 1px solid #292e39;
+  border-radius: 10px;
+}
+
+.terminal-page {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.terminal-container {
+  min-height: 0;
+  flex: 1;
+  padding: 6px 4px 0;
+  overflow: hidden;
+  touch-action: pan-y;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.terminal-stale,
+.input-error,
+.app-notice {
+  margin: 0;
+  padding: 7px 12px;
+  background: #4b2f18;
+  color: #ffd8a8;
+  font-size: 12px;
+  text-align: center;
+}
+
+.app-notice {
+  background: #1d3348;
+  color: #b9dcff;
+}
+
+.input-error {
+  background: #4b1f24;
+  color: #ffc2c7;
+}
+
+.terminal-toolbar {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 5px max(5px, env(safe-area-inset-right)) 5px max(5px, env(safe-area-inset-left));
+  overflow-x: auto;
+  border-top: 1px solid #272b35;
+  background: #171b24;
+  scrollbar-width: none;
+}
+
+.terminal-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-toolbar button {
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 1px solid #3a414f;
+  border-radius: 7px;
+  background: #252b36;
+}
+
+.terminal-toolbar button.active {
+  border-color: #8db3ff;
+  background: #354b70;
+}
+
+.status-bar {
+  display: flex;
+  min-height: 28px;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 max(10px, env(safe-area-inset-right)) env(safe-area-inset-bottom);
+  border-top: 1px solid #272b35;
+  background: #171b24;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e06c75;
+}
+
+.status-bar.connected .status-dot {
+  background: #70d69b;
+}
+
+.login-page,
+.loading-page {
+  display: grid;
+  min-height: 100dvh;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  place-items: center;
+}
+
+.login-card {
+  display: grid;
+  width: min(100%, 380px);
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid #303644;
+  border-radius: 14px;
+  background: #171b24;
+}
+
+.login-card h1,
+.login-card p {
+  margin: 0;
+}
+
+.login-card p,
+.login-card label {
+  color: #aab1be;
+  font-size: 13px;
+}
+
+.login-card input,
+.login-card button {
+  min-height: 46px;
+  border: 1px solid #414958;
+  border-radius: 8px;
+}
+
+.login-card input {
+  padding: 0 12px;
+  background: #10131a;
+  color: #f4f4f5;
+}
+
+.login-card button {
+  background: #31588f;
+}
+
+@media (min-width: 700px) {
+  .dashboard {
+    width: min(100%, 760px);
+    margin: 0 auto;
+  }
 }

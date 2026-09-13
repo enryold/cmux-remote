@@ -1,181 +1,345 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createRpcRequest,
-  parseRpcResponse,
-  type CmuxNotification,
-  type Pane,
-  type Workspace,
+  parseServerMessage,
+  type AllowedKey,
+  type AllowedMethod,
+  type Capabilities,
+  type ConnectionStatus,
+  type TreeSnapshot,
 } from "../lib/cmux-rpc";
-import { useWebSocket, type ConnectionStatus } from "./useWebSocket";
+import { useWebSocket } from "./useWebSocket";
 
 interface PendingRequest {
-  resolve: (result: unknown) => void;
-  reject: (error: Error) => void;
+  resolve(result: unknown): void;
+  reject(error: Error): void;
   timer: ReturnType<typeof setTimeout>;
 }
 
+export interface CmuxApi {
+  bridgeStatus: ConnectionStatus;
+  cmuxStatus: "connected" | "disconnected";
+  capabilities: string[];
+  tree: TreeSnapshot;
+  getCapabilities(): Promise<Capabilities>;
+  refreshTree(): Promise<TreeSnapshot>;
+  readText(surfaceId: string, lines?: number): Promise<string>;
+  sendText(surfaceId: string, text: string): Promise<void>;
+  sendKey(surfaceId: string, key: AllowedKey): Promise<void>;
+  reportViewport(
+    surfaceId: string,
+    columns: number,
+    rows: number,
+    generation: number,
+  ): Promise<void>;
+  clearViewport(surfaceId: string, generation: number): Promise<void>;
+}
+
+const EMPTY_TREE: TreeSnapshot = { workspaces: [] };
 const RPC_TIMEOUT = 10_000;
 
-export function useCmux() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
-  const [panes, setPanes] = useState<Pane[]>([]);
-  const [currentPane, setCurrentPane] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<CmuxNotification[]>([]);
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function invalidResult(): never {
+  throw new Error("invalid_bridge_result");
+}
+
+function capabilitiesResult(value: unknown): Capabilities {
+  const result = record(value);
+  if (
+    !result ||
+    typeof result.protocol !== "string" ||
+    typeof result.version !== "number" ||
+    !Number.isSafeInteger(result.version) ||
+    typeof result.access_mode !== "string" ||
+    !Array.isArray(result.capabilities) ||
+    !result.capabilities.every((item) => typeof item === "string")
+  ) {
+    return invalidResult();
+  }
+  return {
+    protocol: result.protocol,
+    version: result.version,
+    access_mode: result.access_mode,
+    capabilities: result.capabilities,
+  };
+}
+
+function treeResult(value: unknown): TreeSnapshot {
+  const result = record(value);
+  if (!result || !Array.isArray(result.workspaces)) return invalidResult();
+
+  return {
+    workspaces: result.workspaces.map((workspaceValue) => {
+      const workspace = record(workspaceValue);
+      if (
+        !workspace ||
+        typeof workspace.id !== "string" ||
+        typeof workspace.title !== "string" ||
+        typeof workspace.index !== "number" ||
+        typeof workspace.selected !== "boolean" ||
+        !Array.isArray(workspace.panes)
+      ) {
+        return invalidResult();
+      }
+      return {
+        id: workspace.id,
+        title: workspace.title,
+        index: workspace.index,
+        selected: workspace.selected,
+        panes: workspace.panes.map((paneValue) => {
+          const pane = record(paneValue);
+          if (
+            !pane ||
+            typeof pane.id !== "string" ||
+            typeof pane.index !== "number" ||
+            typeof pane.focused !== "boolean" ||
+            !Array.isArray(pane.surfaces)
+          ) {
+            return invalidResult();
+          }
+          return {
+            id: pane.id,
+            index: pane.index,
+            focused: pane.focused,
+            surfaces: pane.surfaces.map((surfaceValue) => {
+              const surface = record(surfaceValue);
+              if (
+                !surface ||
+                typeof surface.id !== "string" ||
+                typeof surface.type !== "string" ||
+                typeof surface.title !== "string" ||
+                typeof surface.index !== "number" ||
+                typeof surface.selected !== "boolean"
+              ) {
+                return invalidResult();
+              }
+              return {
+                id: surface.id,
+                type: surface.type,
+                title: surface.title,
+                index: surface.index,
+                selected: surface.selected,
+              };
+            }),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+export function useCmux(
+  options: { enabled?: boolean; onUnauthorized?: () => void } = {},
+): CmuxApi {
+  const { enabled = true, onUnauthorized } = options;
+  const [cmuxStatus, setCmuxStatus] = useState<
+    "connected" | "disconnected"
+  >("disconnected");
+  const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [tree, setTree] = useState<TreeSnapshot>(EMPTY_TREE);
   const pendingRef = useRef(new Map<string, PendingRequest>());
+  const topologyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTreeRef = useRef<() => Promise<TreeSnapshot>>(() =>
+    Promise.reject(new Error("bridge_disconnected")),
+  );
 
   const handleMessage = useCallback((data: string) => {
+    let message;
     try {
-      const resp = parseRpcResponse(data);
-      const pending = pendingRef.current.get(resp.id);
-      if (pending) {
-        clearTimeout(pending.timer);
-        pendingRef.current.delete(resp.id);
-        if (resp.error) {
-          pending.reject(new Error(resp.error.message));
-        } else {
-          pending.resolve(resp.result);
-        }
-      }
-    } catch (err) {
-      console.error("[cmux] Failed to parse message:", err);
+      message = parseServerMessage(data);
+    } catch {
+      return;
     }
+
+    if ("id" in message) {
+      const pending = pendingRef.current.get(message.id);
+      if (!pending) return;
+      clearTimeout(pending.timer);
+      pendingRef.current.delete(message.id);
+      if (message.ok) pending.resolve(message.result);
+      else pending.reject(new Error(message.error.code));
+      return;
+    }
+
+    if (message.type === "state") {
+      setCmuxStatus(message.cmux);
+      return;
+    }
+
+    if (topologyTimerRef.current !== null) return;
+    topologyTimerRef.current = setTimeout(() => {
+      topologyTimerRef.current = null;
+      void refreshTreeRef.current().catch(() => undefined);
+    }, 100);
   }, []);
 
-  const wsUrl =
-    typeof window !== "undefined"
-      ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`
-      : "ws://localhost:3456/ws";
-
-  const { status, send } = useWebSocket({
+  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
+  const { status: bridgeStatus, send } = useWebSocket({
     url: wsUrl,
+    enabled,
     onMessage: handleMessage,
+    onUnauthorized,
   });
 
   const rpc = useCallback(
-    (method: string, params: Record<string, unknown> = {}): Promise<unknown> => {
-      return new Promise((resolve, reject) => {
-        const req = createRpcRequest(method, params);
+    (method: AllowedMethod, params: Record<string, unknown> = {}) => {
+      const request = createRpcRequest(method, params);
+      return new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
-          pendingRef.current.delete(req.id);
-          reject(new Error(`RPC timeout: ${method}`));
+          pendingRef.current.delete(request.id);
+          reject(new Error("rpc_timeout"));
         }, RPC_TIMEOUT);
-
-        pendingRef.current.set(req.id, { resolve, reject, timer });
-        send(JSON.stringify(req));
+        pendingRef.current.set(request.id, { resolve, reject, timer });
+        if (!send(JSON.stringify(request))) {
+          clearTimeout(timer);
+          pendingRef.current.delete(request.id);
+          reject(new Error("bridge_disconnected"));
+        }
       });
     },
-    [send]
+    [send],
   );
 
-  const listWorkspaces = useCallback(async () => {
-    const result = (await rpc("workspace.list")) as { workspaces: Workspace[] };
-    const wsList = result.workspaces ?? [];
-    setWorkspaces(wsList);
-    const active = wsList.find((w) => w.selected);
-    if (active) setCurrentWorkspace(active.ref);
-    return wsList;
+  const getCapabilities = useCallback(async () => {
+    const result = capabilitiesResult(await rpc("system.capabilities"));
+    setCapabilities(result.capabilities);
+    return result;
   }, [rpc]);
 
-  const selectWorkspace = useCallback(
-    async (ref: string) => {
-      // PWA側の表示切替のみ。ローカルcmuxのフォーカスは変更しない。
-      setCurrentWorkspace(ref);
-    },
-    []
-  );
-
-  const listPanes = useCallback(async (workspaceRef?: string) => {
-    const params: Record<string, unknown> = {};
-    if (workspaceRef) params.workspace_ref = workspaceRef;
-    const result = (await rpc("pane.list", params)) as { panes: Pane[] };
-    const paneList = result.panes ?? [];
-    setPanes(paneList);
-    const active = paneList.find((p) => p.focused);
-    if (active) setCurrentPane(active.selected_surface_ref);
-    return paneList;
+  const refreshTree = useCallback(async () => {
+    const result = treeResult(await rpc("system.tree"));
+    setTree(result);
+    return result;
   }, [rpc]);
-
-  const focusSurface = useCallback(
-    async (surfaceRef: string) => {
-      await rpc("surface.focus", { surface_ref: surfaceRef });
-      setCurrentPane(surfaceRef);
-    },
-    [rpc]
-  );
+  refreshTreeRef.current = refreshTree;
 
   const readText = useCallback(
-    async (workspaceRef?: string): Promise<string> => {
-      const params: Record<string, unknown> = {};
-      if (workspaceRef) params.workspace_ref = workspaceRef;
-      const result = (await rpc("surface.read_text", params)) as { text: string };
-      return result.text ?? "";
+    async (surfaceId: string, lines = 2_000) => {
+      const result = record(
+        await rpc("surface.read_text", { surface_id: surfaceId, lines }),
+      );
+      if (!result || typeof result.text !== "string") return invalidResult();
+      return result.text;
     },
-    [rpc]
+    [rpc],
   );
 
   const sendText = useCallback(
-    async (surfaceRef: string, text: string) => {
-      await rpc("surface.send_text", { surface_ref: surfaceRef, text });
+    async (surfaceId: string, text: string) => {
+      await rpc("surface.send_text", { surface_id: surfaceId, text });
     },
-    [rpc]
+    [rpc],
   );
 
-  const getTree = useCallback(async () => {
-    return await rpc("system.tree");
-  }, [rpc]);
-
-  const listNotifications = useCallback(async () => {
-    const result = (await rpc("notification.list")) as { notifications: CmuxNotification[] };
-    const list = result.notifications ?? [];
-    setNotifications(list);
-    return list;
-  }, [rpc]);
-
-  const navigateWorkspace = useCallback(
-    async (direction: "next" | "prev") => {
-      if (workspaces.length === 0) return;
-      const idx = workspaces.findIndex((w) => w.ref === currentWorkspace);
-      const nextIdx =
-        direction === "next"
-          ? (idx + 1) % workspaces.length
-          : (idx - 1 + workspaces.length) % workspaces.length;
-      const target = workspaces[nextIdx];
-      if (target) await selectWorkspace(target.ref);
+  const sendKey = useCallback(
+    async (surfaceId: string, key: AllowedKey) => {
+      await rpc("surface.send_key", { surface_id: surfaceId, key });
     },
-    [workspaces, currentWorkspace, selectWorkspace]
+    [rpc],
   );
 
-  const navigatePane = useCallback(
-    async (direction: "next" | "prev") => {
-      if (panes.length === 0) return;
-      const idx = panes.findIndex((p) => p.selected_surface_ref === currentPane);
-      const nextIdx =
-        direction === "next"
-          ? (idx + 1) % panes.length
-          : (idx - 1 + panes.length) % panes.length;
-      const target = panes[nextIdx];
-      if (target) await focusSurface(target.selected_surface_ref);
+  const reportViewport = useCallback(
+    async (
+      surfaceId: string,
+      columns: number,
+      rows: number,
+      generation: number,
+    ) => {
+      await rpc("terminal.viewport", {
+        surface_id: surfaceId,
+        viewport_columns: columns,
+        viewport_rows: rows,
+        viewport_generation: generation,
+      });
     },
-    [panes, currentPane, focusSurface]
+    [rpc],
+  );
+
+  const clearViewport = useCallback(
+    async (surfaceId: string, generation: number) => {
+      await rpc("terminal.viewport", {
+        surface_id: surfaceId,
+        clear: true,
+        viewport_generation: generation,
+      });
+    },
+    [rpc],
+  );
+
+  useEffect(() => {
+    if (bridgeStatus !== "connected") {
+      setCmuxStatus("disconnected");
+      setCapabilities([]);
+      for (const pending of pendingRef.current.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("bridge_disconnected"));
+      }
+      pendingRef.current.clear();
+      if (topologyTimerRef.current !== null) {
+        clearTimeout(topologyTimerRef.current);
+        topologyTimerRef.current = null;
+      }
+      return;
+    }
+
+    void getCapabilities()
+      .then(() => refreshTree())
+      .catch(() => undefined);
+  }, [bridgeStatus, getCapabilities, refreshTree]);
+
+  useEffect(() => {
+    if (bridgeStatus !== "connected") return;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const startInterval = () => {
+      if (interval !== null) clearInterval(interval);
+      interval =
+        document.visibilityState === "visible"
+          ? setInterval(() => {
+              void refreshTree().catch(() => undefined);
+            }, 15_000)
+          : null;
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshTree().catch(() => undefined);
+      }
+      startInterval();
+    };
+    startInterval();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (interval !== null) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [bridgeStatus, refreshTree]);
+
+  useEffect(
+    () => () => {
+      for (const pending of pendingRef.current.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("bridge_disconnected"));
+      }
+      pendingRef.current.clear();
+    },
+    [],
   );
 
   return {
-    status: status as ConnectionStatus,
-    workspaces,
-    currentWorkspace,
-    panes,
-    currentPane,
-    notifications,
-    listWorkspaces,
-    selectWorkspace,
-    listPanes,
-    focusSurface,
+    bridgeStatus,
+    cmuxStatus,
+    capabilities,
+    tree,
+    getCapabilities,
+    refreshTree,
     readText,
     sendText,
-    getTree,
-    listNotifications,
-    navigateWorkspace,
-    navigatePane,
+    sendKey,
+    reportViewport,
+    clearViewport,
   };
 }

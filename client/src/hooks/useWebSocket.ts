@@ -1,91 +1,148 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ConnectionStatus } from "../lib/cmux-rpc";
 
-export type ConnectionStatus = "connecting" | "connected" | "disconnected";
-
-interface UseWebSocketOptions {
+export interface UseWebSocketOptions {
   url: string;
+  enabled: boolean;
   onMessage: (data: string) => void;
-  maxRetries?: number;
+  onUnauthorized?: () => void;
 }
 
-const DEFAULT_MAX_RETRIES = 10;
+export function reconnectDelay(attempt: number, random: number): number {
+  const base = Math.min(1_000 * 2 ** attempt, 30_000);
+  return Math.round(base * (0.8 + random * 0.4));
+}
 
-export function useWebSocket({ url, onMessage, maxRetries = DEFAULT_MAX_RETRIES }: UseWebSocketOptions) {
+export function useWebSocket({
+  url,
+  enabled,
+  onMessage,
+  onUnauthorized,
+}: UseWebSocketOptions): {
+  status: ConnectionStatus;
+  send: (data: string) => boolean;
+  reconnectNow: () => void;
+} {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
-  const wsRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectRef = useRef<() => void>(() => undefined);
   const onMessageRef = useRef(onMessage);
+  const onUnauthorizedRef = useRef(onUnauthorized);
   const unmountedRef = useRef(false);
   onMessageRef.current = onMessage;
+  onUnauthorizedRef.current = onUnauthorized;
 
-  const clearRetryTimer = useCallback(() => {
-    if (retryTimerRef.current !== null) {
-      clearTimeout(retryTimerRef.current);
-      retryTimerRef.current = null;
-    }
+  const clearRetry = useCallback(() => {
+    if (retryTimerRef.current !== null) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
   }, []);
 
   const connect = useCallback(() => {
-    if (unmountedRef.current) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!enabled || unmountedRef.current) return;
+    if (
+      socketRef.current?.readyState === WebSocket.OPEN ||
+      socketRef.current?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
 
-    clearRetryTimer();
+    clearRetry();
     setStatus("connecting");
-    const ws = new WebSocket(url);
 
-    ws.onopen = () => {
-      setStatus("connected");
-      retryRef.current = 0;
-      console.log("[ws] Connected");
+    const scheduleRetry = () => {
+      if (unmountedRef.current || !enabled) return;
+      const delay = reconnectDelay(retryRef.current, Math.random());
+      retryRef.current += 1;
+      retryTimerRef.current = setTimeout(() => connectRef.current(), delay);
     };
 
-    ws.onmessage = (event) => {
-      onMessageRef.current(event.data as string);
-    };
-
-    ws.onclose = () => {
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(url);
+    } catch {
       setStatus("disconnected");
-      wsRef.current = null;
+      scheduleRetry();
+      return;
+    }
+    socketRef.current = socket;
 
-      if (unmountedRef.current) return;
-
-      if (retryRef.current >= maxRetries) {
-        console.log(`[ws] Max retries (${maxRetries}) reached, giving up`);
+    socket.onopen = () => {
+      if (socketRef.current !== socket) return;
+      retryRef.current = 0;
+      setStatus("connected");
+    };
+    socket.onmessage = (event) => {
+      if (typeof event.data === "string") onMessageRef.current(event.data);
+    };
+    socket.onclose = (event) => {
+      if (socketRef.current !== socket) return;
+      socketRef.current = null;
+      setStatus("disconnected");
+      if (unmountedRef.current || !enabled) return;
+      if (event.code === 4401) {
+        onUnauthorizedRef.current?.();
         return;
       }
-
-      // Exponential backoff: 1s, 2s, 4s, ... max 30s
-      const delay = Math.min(1000 * 2 ** retryRef.current, 30_000);
-      retryRef.current++;
-      console.log(`[ws] Reconnecting in ${delay}ms (attempt ${retryRef.current}/${maxRetries})...`);
-      retryTimerRef.current = setTimeout(connect, delay);
+      scheduleRetry();
     };
+    socket.onerror = () => socket.close();
+  }, [clearRetry, enabled, url]);
+  connectRef.current = connect;
 
-    ws.onerror = (err) => {
-      console.error("[ws] Error:", err);
-      ws.close();
-    };
-
-    wsRef.current = ws;
-  }, [url, maxRetries, clearRetryTimer]);
-
-  const send = useCallback((data: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(data);
+  const reconnectNow = useCallback(() => {
+    if (!enabled || unmountedRef.current) return;
+    clearRetry();
+    const socket = socketRef.current;
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.close();
+      socketRef.current = null;
     }
+    connectRef.current();
+  }, [clearRetry, enabled]);
+
+  const send = useCallback((data: string): boolean => {
+    const socket = socketRef.current;
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    socket.send(data);
+    return true;
   }, []);
 
   useEffect(() => {
     unmountedRef.current = false;
-    connect();
+    if (enabled) connectRef.current();
+    else setStatus("disconnected");
+
     return () => {
       unmountedRef.current = true;
-      clearRetryTimer();
-      wsRef.current?.close();
-      wsRef.current = null;
+      clearRetry();
+      const socket = socketRef.current;
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
+      socketRef.current = null;
     };
-  }, [connect, clearRetryTimer]);
+  }, [clearRetry, enabled]);
 
-  return { status, send };
+  useEffect(() => {
+    if (!enabled) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") reconnectNow();
+    };
+    window.addEventListener("online", reconnectNow);
+    window.addEventListener("pageshow", reconnectNow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("online", reconnectNow);
+      window.removeEventListener("pageshow", reconnectNow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [enabled, reconnectNow]);
+
+  return { status, send, reconnectNow };
 }
