@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { createSessionValue, SESSION_COOKIE } from "../auth";
+import {
+  createPairedSessionValue,
+  createSessionValue,
+  SESSION_COOKIE,
+} from "../auth";
 import type { RuntimeConfig } from "../config";
 import { startServer } from "../index";
 import { TAILSCALE_CAPABILITIES_HEADER } from "../tailscale";
@@ -88,9 +92,10 @@ describe("WebSocket upgrade boundary", () => {
     };
     const server = startServer(config);
     const origin = `http://127.0.0.1:${server.port}`;
-    const session = createSessionValue(
+    const session = createPairedSessionValue(
       config.remoteToken,
       Math.floor(Date.now() / 1_000) + 60,
+      capability,
     );
 
     try {

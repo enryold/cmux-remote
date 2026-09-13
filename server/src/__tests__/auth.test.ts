@@ -3,6 +3,8 @@ import {
   createAuthRoutes,
   createPairingChallenge,
   createSessionValue,
+  isAuthorized,
+  SESSION_COOKIE,
   verifySessionValue,
 } from "../auth";
 import { TAILSCALE_CAPABILITIES_HEADER } from "../tailscale";
@@ -181,5 +183,20 @@ describe("auth", () => {
       mode: "pairing",
       deviceAuthorized: true,
     });
+  });
+
+  it("rejects a token-mode session after device pairing is enabled", () => {
+    const now = 1_000;
+    const tokenSession = createSessionValue(config.remoteToken, now + 60);
+    const request = new Request(config.publicOrigin, {
+      headers: {
+        cookie: `${SESSION_COOKIE}=${tokenSession}`,
+        [TAILSCALE_CAPABILITIES_HEADER]: JSON.stringify({
+          [capability]: [{ access: true }],
+        }),
+      },
+    });
+
+    expect(isAuthorized(request, pairingConfig, now)).toBe(false);
   });
 });

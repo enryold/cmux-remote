@@ -31,6 +31,18 @@ export function createSessionValue(token: string, expiresAt: number): string {
   return `${payload}.${sessionSignature(token, payload)}`;
 }
 
+export function createPairedSessionValue(
+  token: string,
+  expiresAt: number,
+  capability: string,
+): string {
+  const binding = createHash("sha256")
+    .update(capability)
+    .digest("base64url");
+  const payload = `v2.${expiresAt}.${binding}`;
+  return `${payload}.${sessionSignature(token, payload)}`;
+}
+
 export function verifySessionValue(
   value: string,
   token: string,
@@ -44,6 +56,27 @@ export function verifySessionValue(
 
   const payload = `v1.${expiresAt}`;
   return safeEqual(parts[2] ?? "", sessionSignature(token, payload));
+}
+
+function verifyPairedSessionValue(
+  value: string,
+  token: string,
+  capability: string,
+  now: number,
+): boolean {
+  const parts = value.split(".");
+  if (parts.length !== 4 || parts[0] !== "v2") return false;
+
+  const expiresAt = Number(parts[1]);
+  if (!Number.isSafeInteger(expiresAt) || now > expiresAt) return false;
+
+  const binding = createHash("sha256")
+    .update(capability)
+    .digest("base64url");
+  if (!safeEqual(parts[2] ?? "", binding)) return false;
+
+  const payload = `v2.${expiresAt}.${binding}`;
+  return safeEqual(parts[3] ?? "", sessionSignature(token, payload));
 }
 
 export function createPairingChallenge(
@@ -98,7 +131,15 @@ export function isAuthenticated(
   now = Math.floor(Date.now() / 1_000),
 ): boolean {
   const session = readCookie(request, SESSION_COOKIE);
-  return session !== null && verifySessionValue(session, config.remoteToken, now);
+  if (session === null) return false;
+  return config.tailscaleCapability === null
+    ? verifySessionValue(session, config.remoteToken, now)
+    : verifyPairedSessionValue(
+        session,
+        config.remoteToken,
+        config.tailscaleCapability,
+        now,
+      );
 }
 
 export function isAuthorized(
@@ -205,7 +246,13 @@ export function createAuthRoutes(
     setCookie(
       c,
       SESSION_COOKIE,
-      createSessionValue(config.remoteToken, expiresAt),
+      config.tailscaleCapability === null
+        ? createSessionValue(config.remoteToken, expiresAt)
+        : createPairedSessionValue(
+            config.remoteToken,
+            expiresAt,
+            config.tailscaleCapability,
+          ),
       cookieOptions(c.req.raw, config, maxAge),
     );
     return c.body(null, 204);
