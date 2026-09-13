@@ -195,6 +195,17 @@ describe("sanitizeCmuxResult", () => {
     ).toEqual({ surface_id: surfaceId, columns: 80, rows: 24 });
   });
 
+  it("accepts the smaller viewport-clear response", () => {
+    expect(
+      sanitizeCmuxResult("terminal.viewport", {
+        surface_id: surfaceId.toUpperCase(),
+        workspace_id: workspaceId,
+        render_epoch: "private",
+        render_revision_floor: 12,
+      }),
+    ).toEqual({ surface_id: surfaceId });
+  });
+
   it("keeps a valid UTF-8 suffix and rejects malformed cmux results", () => {
     const prefix = "x".repeat(2 * 1024 * 1024);
     expect(

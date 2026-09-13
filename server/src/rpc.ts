@@ -357,8 +357,12 @@ function trailingUtf8Bytes(value: string, maximum: number): string {
 
 function sanitizeViewport(value: unknown) {
   const result = cmuxRecord(value);
+  const surface_id = uuid(result.surface_id, "invalid_cmux_response");
+  if (result.columns === undefined && result.rows === undefined) {
+    return { surface_id };
+  }
   return {
-    surface_id: uuid(result.surface_id, "invalid_cmux_response"),
+    surface_id,
     columns: cmuxInteger(result.columns),
     rows: cmuxInteger(result.rows),
   };
