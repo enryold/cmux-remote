@@ -2,11 +2,19 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { deleteCookie, setCookie } from "hono/cookie";
 import type { RuntimeConfig } from "./config";
+import { hasTailscaleCapability } from "./tailscale";
 
 export const SESSION_COOKIE = "cmux_remote_session";
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const PAIRED_SESSION_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 const LOGIN_BODY_LIMIT = 4_096;
+const PAIRING_TTL_SECONDS = 10 * 60;
+const MAX_PAIRING_FAILURES = 5;
+
+export interface PairingChallenge {
+  verify(candidate: string, now?: number): boolean;
+}
 
 function safeEqual(left: string, right: string): boolean {
   const leftHash = createHash("sha256").update(left).digest();
@@ -38,6 +46,33 @@ export function verifySessionValue(
   return safeEqual(parts[2] ?? "", sessionSignature(token, payload));
 }
 
+export function createPairingChallenge(
+  code: string,
+  createdAt = Math.floor(Date.now() / 1_000),
+): PairingChallenge {
+  let used = false;
+  let failures = 0;
+
+  return {
+    verify(candidate, now = Math.floor(Date.now() / 1_000)) {
+      const matches = safeEqual(candidate, code);
+      if (
+        used ||
+        failures >= MAX_PAIRING_FAILURES ||
+        now > createdAt + PAIRING_TTL_SECONDS
+      ) {
+        return false;
+      }
+      if (matches) {
+        used = true;
+        return true;
+      }
+      failures += 1;
+      return false;
+    },
+  };
+}
+
 export function isAllowedOrigin(
   request: Request,
   config: RuntimeConfig,
@@ -66,26 +101,61 @@ export function isAuthenticated(
   return session !== null && verifySessionValue(session, config.remoteToken, now);
 }
 
-function cookieOptions(request: Request, config: RuntimeConfig) {
+export function isAuthorized(
+  request: Request,
+  config: RuntimeConfig,
+  now = Math.floor(Date.now() / 1_000),
+): boolean {
+  return (
+    hasTailscaleCapability(request, config.tailscaleCapability) &&
+    isAuthenticated(request, config, now)
+  );
+}
+
+function cookieOptions(
+  request: Request,
+  config: RuntimeConfig,
+  maxAge = SESSION_TTL_SECONDS,
+) {
   const origin = config.publicOrigin ?? new URL(request.url).origin;
   return {
     httpOnly: true,
     sameSite: "Strict" as const,
     secure: new URL(origin).protocol === "https:",
     path: "/",
-    maxAge: SESSION_TTL_SECONDS,
+    maxAge,
   };
 }
 
-export function createAuthRoutes(config: RuntimeConfig): Hono {
+export function createAuthRoutes(
+  config: RuntimeConfig,
+  pairingChallenge = config.pairingCode
+    ? createPairingChallenge(config.pairingCode)
+    : null,
+): Hono {
   const app = new Hono();
+  const pairingMode = config.tailscaleCapability !== null;
 
-  app.get("/auth/status", (c) =>
-    c.json({ authenticated: isAuthenticated(c.req.raw, config) }),
-  );
+  app.get("/auth/status", (c) => {
+    const deviceAuthorized = hasTailscaleCapability(
+      c.req.raw,
+      config.tailscaleCapability,
+    );
+    return c.json({
+      authenticated: deviceAuthorized && isAuthenticated(c.req.raw, config),
+      mode: pairingMode ? "pairing" : "token",
+      deviceAuthorized,
+    });
+  });
 
   app.post("/auth/login", async (c) => {
     if (!isAllowedOrigin(c.req.raw, config)) {
+      return c.json({ error: "forbidden" }, 403);
+    }
+    if (
+      pairingMode &&
+      !hasTailscaleCapability(c.req.raw, config.tailscaleCapability)
+    ) {
       return c.json({ error: "forbidden" }, 403);
     }
 
@@ -106,27 +176,37 @@ export function createAuthRoutes(config: RuntimeConfig): Hono {
       return c.json({ error: "invalid_request" }, 400);
     }
 
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      return c.json({ error: "invalid_request" }, 400);
+    }
+
+    const key = pairingMode ? "pairingCode" : "token";
+    const record = body as Record<string, unknown>;
+    const credential = record[key];
     if (
-      typeof body !== "object" ||
-      body === null ||
-      Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
-      !("token" in body) ||
-      typeof body.token !== "string"
+      Object.keys(record).length !== 1 ||
+      typeof credential !== "string" ||
+      (pairingMode && !/^\d{6}$/.test(credential))
     ) {
       return c.json({ error: "invalid_request" }, 400);
     }
 
-    if (!safeEqual(body.token, config.remoteToken)) {
+    const accepted = pairingMode
+      ? pairingChallenge?.verify(credential) === true
+      : safeEqual(credential, config.remoteToken);
+    if (!accepted) {
       return c.json({ error: "authentication_failed" }, 401);
     }
 
-    const expiresAt = Math.floor(Date.now() / 1_000) + SESSION_TTL_SECONDS;
+    const maxAge = pairingMode
+      ? PAIRED_SESSION_TTL_SECONDS
+      : SESSION_TTL_SECONDS;
+    const expiresAt = Math.floor(Date.now() / 1_000) + maxAge;
     setCookie(
       c,
       SESSION_COOKIE,
       createSessionValue(config.remoteToken, expiresAt),
-      cookieOptions(c.req.raw, config),
+      cookieOptions(c.req.raw, config, maxAge),
     );
     return c.body(null, 204);
   });

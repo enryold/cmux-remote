@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import {
   createAuthRoutes,
+  createPairingChallenge,
   isAllowedOrigin,
   isAuthenticated,
 } from "./auth";
@@ -20,6 +21,9 @@ export interface RunningServer {
 
 export function startServer(config: RuntimeConfig): RunningServer {
   const app = new Hono();
+  const pairingChallenge = config.pairingCode
+    ? createPairingChallenge(config.pairingCode)
+    : null;
   app.use("*", async (context, next) => {
     await next();
     context.header(
@@ -31,7 +35,7 @@ export function startServer(config: RuntimeConfig): RunningServer {
     context.header("X-Frame-Options", "DENY");
   });
   app.route("/", createHealthRoutes(config));
-  app.route("/", createAuthRoutes(config));
+  app.route("/", createAuthRoutes(config, pairingChallenge));
   app.use("/*", serveStatic({ root: clientDistPath }));
 
   const eventStream = new CmuxEventStream({
@@ -63,6 +67,11 @@ export function startServer(config: RuntimeConfig): RunningServer {
   console.log(
     `[server] cmux-remote bridge running on http://${config.hostname}:${server.port}`,
   );
+  if (config.pairingCode) {
+    console.log(
+      `[auth] pairing code ${config.pairingCode} (expires in 10 minutes)`,
+    );
+  }
   return {
     port: server.port ?? config.port,
     async stop(closeActiveConnections) {
