@@ -2,6 +2,7 @@ node_modules/
 dist/
 .devenv/
 .direnv/
+.worktrees/
 
 # Editor
 .vscode/
