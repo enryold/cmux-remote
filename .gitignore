@@ -1,6 +1,7 @@
 node_modules/
 dist/
-*.lock
+.devenv/
+.direnv/
 
 # Editor
 .vscode/
