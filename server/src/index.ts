@@ -5,7 +5,7 @@ import {
   createAuthRoutes,
   createPairingChallenge,
   isAllowedOrigin,
-  isAuthenticated,
+  isAuthorized,
 } from "./auth";
 import { CmuxEventStream } from "./cmux-events";
 import { loadConfig, type RuntimeConfig } from "./config";
@@ -51,7 +51,7 @@ export function startServer(config: RuntimeConfig): RunningServer {
       if (new URL(request.url).pathname === "/ws") {
         if (
           !isAllowedOrigin(request, config) ||
-          !isAuthenticated(request, config)
+          !isAuthorized(request, config)
         ) {
           return new Response("Unauthorized", { status: 401 });
         }

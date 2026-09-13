@@ -19,6 +19,8 @@ vi.mock("../components/Terminal", () => ({
 
 const auth = {
   status: "authenticated" as const,
+  mode: "token" as const,
+  deviceAuthorized: true,
   error: null,
   login: vi.fn(),
   logout: vi.fn(),

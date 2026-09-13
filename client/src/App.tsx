@@ -20,7 +20,14 @@ export function App() {
     return <main className="loading-page">Connecting…</main>;
   }
   if (auth.status === "anonymous") {
-    return <Login error={auth.error} onLogin={auth.login} />;
+    return (
+      <Login
+        deviceAuthorized={auth.deviceAuthorized}
+        error={auth.error}
+        mode={auth.mode}
+        onLogin={auth.login}
+      />
+    );
   }
   return (
     <CommandCenter

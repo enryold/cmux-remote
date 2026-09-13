@@ -54,4 +54,41 @@ describe("useAuth", () => {
     expect(result.current.status).toBe("anonymous");
     expect(result.current.error).toBe("Authentication failed");
   });
+
+  it("submits a pairing code when status selects pairing mode", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        authenticated: false,
+        mode: "pairing",
+        deviceAuthorized: true,
+      }),
+    );
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.status).toBe("anonymous"));
+    expect(result.current.mode).toBe("pairing");
+    expect(result.current.deviceAuthorized).toBe(true);
+
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await act(async () => result.current.login("123456"));
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/auth/login",
+      expect.objectContaining({
+        body: JSON.stringify({ pairingCode: "123456" }),
+      }),
+    );
+  });
+
+  it("fails closed when pairing status does not authorize the device", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        authenticated: false,
+        mode: "pairing",
+        deviceAuthorized: false,
+      }),
+    );
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.status).toBe("anonymous"));
+    expect(result.current.mode).toBe("pairing");
+    expect(result.current.deviceAuthorized).toBe(false);
+  });
 });

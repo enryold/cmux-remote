@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createSessionValue, SESSION_COOKIE } from "../auth";
 import type { RuntimeConfig } from "../config";
 import { startServer } from "../index";
+import { TAILSCALE_CAPABILITIES_HEADER } from "../tailscale";
 
 describe("WebSocket upgrade boundary", () => {
   it("requires both a valid same-origin request and session", async () => {
@@ -68,6 +69,49 @@ describe("WebSocket upgrade boundary", () => {
       expect(response.headers.get("x-frame-options")).toBe("DENY");
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
       expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  it("requires the configured device capability in addition to the session", async () => {
+    const capability = "example.com/cap/cmux-remote";
+    const config: RuntimeConfig = {
+      hostname: "127.0.0.1",
+      port: 0,
+      remoteToken: "a".repeat(32),
+      publicOrigin: null,
+      tailscaleCapability: capability,
+      pairingCode: "123456",
+      socketPath: "/tmp/cmux-test.sock",
+      socketPassword: null,
+    };
+    const server = startServer(config);
+    const origin = `http://127.0.0.1:${server.port}`;
+    const session = createSessionValue(
+      config.remoteToken,
+      Math.floor(Date.now() / 1_000) + 60,
+    );
+
+    try {
+      const missingCapability = await fetch(`${origin}/ws`, {
+        headers: {
+          origin,
+          cookie: `${SESSION_COOKIE}=${session}`,
+        },
+      });
+      expect(missingCapability.status).toBe(401);
+
+      const authorized = await fetch(`${origin}/ws`, {
+        headers: {
+          origin,
+          cookie: `${SESSION_COOKIE}=${session}`,
+          [TAILSCALE_CAPABILITIES_HEADER]: JSON.stringify({
+            [capability]: [{ access: true }],
+          }),
+        },
+      });
+      expect(authorized.status).toBe(400);
     } finally {
       await server.stop(true);
     }
