@@ -1,5 +1,9 @@
 import { startServer } from "../server/src/index";
-import { E2E_TOKEN } from "./helpers";
+import {
+  E2E_CAPABILITY,
+  E2E_PAIRING_CODE,
+  E2E_TOKEN,
+} from "./helpers";
 import { startFakeCmux } from "./fake-cmux";
 
 const fake = await startFakeCmux();
@@ -8,8 +12,8 @@ const server = startServer({
   port: 3457,
   remoteToken: E2E_TOKEN,
   publicOrigin: null,
-  tailscaleCapability: null,
-  pairingCode: null,
+  tailscaleCapability: E2E_CAPABILITY,
+  pairingCode: E2E_PAIRING_CODE,
   socketPath: fake.socketPath,
   socketPassword: "e2e-cmux-password",
 });

@@ -6,7 +6,7 @@ to discover terminals, read recent output, type, and recover after network or ba
 
 ```text
 iPhone Safari / PWA
-        | private Tailscale path + session authentication
+        | Tailscale device capability + paired session
         v
 Bun/Hono bridge on the Mac
         | validated RPC whitelist over a Unix socket
@@ -23,14 +23,16 @@ Controlling this app can be equivalent to controlling your Mac shell. The bridge
 
 - binds to `127.0.0.1:3456` by default;
 - refuses to start without a `CMUX_REMOTE_TOKEN` of at least 32 UTF-8 bytes;
+- can require a Tailscale app capability granted to one exact device;
+- supports a single-use six-digit pairing code without sending the signing secret to the browser;
 - uses an HttpOnly, SameSite session cookie after login;
 - checks the exact request Origin for login, logout, and WebSocket upgrades;
 - accepts only topology, bounded terminal read/input, named-key, and viewport RPCs;
 - never exposes arbitrary cmux RPC, browser control, workspace creation, or shell spawning;
 - never caches authentication, API, WebSocket, or terminal responses in the service worker.
 
-Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. A token is a second layer,
-not a replacement for a private tailnet.
+Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. Device pairing is a second
+layer, not a replacement for a private tailnet policy.
 
 ## Requirements
 
@@ -48,13 +50,14 @@ devenv shell -- deps
 devenv shell -- build-all
 ```
 
-Generate a high-entropy application token and keep it in a password manager or a gitignored `.env`:
+Generate a high-entropy session-signing secret and keep it in a password manager or a gitignored
+`.env`:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Start the production bridge from the repository root:
+For local token mode, start the production bridge from the repository root:
 
 ```bash
 CMUX_REMOTE_TOKEN='<generated token>' devenv shell -- bun run --cwd server start
@@ -62,11 +65,70 @@ CMUX_REMOTE_TOKEN='<generated token>' devenv shell -- bun run --cwd server start
 
 It serves the built client at `http://127.0.0.1:3456`.
 
-### Remote access with Tailscale
+### Pair one iPhone with Tailscale
 
-The preferred mode is Tailscale Serve forwarding HTTPS traffic to the localhost bridge. Configure
-Serve for `http://127.0.0.1:3456`, then set `CMUX_REMOTE_ORIGIN` to the exact HTTPS origin shown by
-Tailscale before starting the bridge:
+The preferred mode gives one iPhone a custom Tailscale app capability and requires a six-digit code
+on first use. The bridge still binds only to localhost, and Tailscale Serve strips spoofed capability
+headers before forwarding its trusted value.
+
+Choose a capability under a domain you control and add a narrow rule to the tailnet policy. Tailscale
+IPs remain stable while each node remains registered.
+
+```jsonc
+{
+  "hosts": {
+    "cmux-phone": "<iphone-tailscale-ip>",
+    "cmux-mac": "<mac-tailscale-ip>"
+  },
+  "grants": [
+    {
+      "src": ["cmux-phone"],
+      "dst": ["cmux-mac"],
+      "ip": ["tcp:443"],
+      "app": {
+        "example.com/cap/cmux-remote": [{ "access": true }]
+      }
+    }
+  ]
+}
+```
+
+Grants are additive. Review existing broader grants separately if the network layer must also reject
+every other tailnet device.
+
+Store the bridge configuration in a gitignored `.env`:
+
+```dotenv
+CMUX_REMOTE_TOKEN=<generated-64-hex-character-secret>
+CMUX_REMOTE_ORIGIN=https://cmux.your-tailnet.ts.net
+CMUX_REMOTE_TAILSCALE_CAPABILITY=example.com/cap/cmux-remote
+```
+
+Build and start the bridge, then forward the same capability through Serve:
+
+```bash
+devenv shell -- build-all
+devenv shell -- bun run --cwd server start
+tailscale serve --bg \
+  --accept-app-caps=example.com/cap/cmux-remote \
+  http://127.0.0.1:3456
+```
+
+The bridge prints one six-digit code valid for ten minutes. It is consumed after a successful
+pairing and locks after five failed attempts. Pairing creates a 365-day `HttpOnly`, `Secure`,
+`SameSite=Strict` cookie; the Tailscale capability is checked again on every protected request and
+WebSocket upgrade. Restart the bridge to obtain a fresh recovery code. Rotate
+`CMUX_REMOTE_TOKEN` or remove the tailnet grant to revoke access.
+
+On iPhone, connect Tailscale, open the HTTPS URL in Safari, enter the pairing code, then use Share →
+Add to Home Screen. The full `*.ts.net` URL remains stable while the Tailscale node name and tailnet
+DNS suffix remain unchanged. Do not substitute a `.local` hostname: it is an mDNS name and does not
+provide the trusted HTTPS origin required by the PWA.
+
+### Token fallback
+
+If `CMUX_REMOTE_TAILSCALE_CAPABILITY` is unset, the existing token login remains available. Tailscale
+Serve is still preferred for HTTPS remote access:
 
 ```bash
 CMUX_REMOTE_TOKEN='<generated token>' \
@@ -74,26 +136,22 @@ CMUX_REMOTE_ORIGIN='https://your-mac.your-tailnet.ts.net' \
 devenv shell -- bun run --cwd server start
 ```
 
-Alternatively, bind explicitly to the Mac's Tailscale IPv4 address with `HOST=<tailscale-ip>` and
-open `http://<tailscale-ip>:3456`. This mode is HTTP and does not provide the HTTPS protection of
-Tailscale Serve, but it remains tailnet-only when the address is exact.
-
-On iPhone, connect Tailscale, open the HTTPS URL in Safari, sign in with the application token, then
-use Share → Add to Home Screen.
-
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `CMUX_REMOTE_TOKEN` | required | Application login secret; minimum 32 UTF-8 bytes |
+| `CMUX_REMOTE_TOKEN` | required | Session-signing secret, or login token in fallback mode; minimum 32 UTF-8 bytes |
+| `CMUX_REMOTE_TAILSCALE_CAPABILITY` | unset | Enables device pairing and requires this exact Serve app capability |
+| `CMUX_REMOTE_PAIRING_CODE` | generated | Optional deterministic six-digit override for supervised automation |
 | `HOST` | `127.0.0.1` | Exact bridge bind address |
 | `PORT` | `3456` | Bridge port |
 | `CMUX_REMOTE_ORIGIN` | request origin | Exact external HTTP(S) origin, required behind an HTTPS proxy |
 | `CMUX_SOCKET_PATH` | current cmux state socket | Explicit cmux Unix socket |
 | `CMUX_SOCKET_PASSWORD` | unset | Password for an authenticated cmux socket |
 
-The socket resolver checks cmux's current `last-socket-path` and state socket before the legacy
-Application Support path. Secrets must remain outside Git; `.env` files are ignored.
+Pairing mode requires `HOST=127.0.0.1` and an HTTPS `CMUX_REMOTE_ORIGIN`. The socket resolver checks
+cmux's current `last-socket-path` and state socket before the legacy Application Support path.
+Secrets must remain outside Git; `.env` files are ignored.
 
 ## Development
 
