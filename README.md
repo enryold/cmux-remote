@@ -2,118 +2,163 @@
 
 [日本語](README.ja.md)
 
-Remote terminal viewer for [cmux](https://cmux.dev) — access your cmux workspaces from anywhere via iPhone PWA.
+An open-source, mobile-first command center for terminal surfaces running in
+[cmux](https://cmux.dev). It keeps cmux as the primary workspace and gives an iPhone a focused way
+to discover terminals, read recent output, type, and recover after network or background changes.
 
-## Overview
-
-cmux-remote is a lightweight bridge that lets you monitor and switch between cmux terminal workspaces from your iPhone. Designed for developers who use AI-assisted coding and primarily need to **watch** terminal output on the go.
-
+```text
+iPhone Safari / PWA
+        | private Tailscale path + session authentication
+        v
+Bun/Hono bridge on the Mac
+        | validated RPC whitelist over a Unix socket
+        v
+cmux
 ```
-iPhone PWA (React + xterm.js)
-    ↕ WebSocket
-Bridge Server (Bun + Hono)
-    ↕ Unix Domain Socket
-cmux (~/.../cmux.sock)
-```
 
-### Key Features
+There is no required cloud service. This is not a web IDE, generic SSH endpoint, file manager, Git
+client, or remote browser.
 
-- **Real-time terminal display** via xterm.js with 1-second polling
-- **Gesture navigation** — 2-finger swipe up/down to switch workspaces, left/right to switch panes
-- **PWA** — install to home screen for a native app experience
-- **Lightweight** — ~144KB gzipped client, zero cloud infrastructure required
-- **Secure** — deploy behind Tailscale or Cloudflare Tunnel
+## Security model
 
-## Prerequisites
+Controlling this app can be equivalent to controlling your Mac shell. The bridge therefore:
 
-- [cmux](https://cmux.dev) running on your local machine
-- [Bun](https://bun.sh) runtime
-- Network tunnel for remote access (e.g., [Tailscale](https://tailscale.com), [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/))
+- binds to `127.0.0.1:3456` by default;
+- refuses to start without a `CMUX_REMOTE_TOKEN` of at least 32 UTF-8 bytes;
+- uses an HttpOnly, SameSite session cookie after login;
+- checks the exact request Origin for login, logout, and WebSocket upgrades;
+- accepts only topology, bounded terminal read/input, named-key, and viewport RPCs;
+- never exposes arbitrary cmux RPC, browser control, workspace creation, or shell spawning;
+- never caches authentication, API, WebSocket, or terminal responses in the service worker.
 
-## Quick Start
+Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. A token is a second layer,
+not a replacement for a private tailnet.
 
-### 1. Build the client
+## Requirements
+
+- macOS with cmux running;
+- [devenv](https://devenv.sh/) and direnv, or the Bun/Node versions described by `devenv.nix`;
+- Tailscale for remote access;
+- Safari on iPhone for Add to Home Screen.
+
+## Setup
+
+Install the locked dependencies and build the PWA:
 
 ```bash
-cd client
-bun install
-bun run build
+devenv shell -- deps
+devenv shell -- build-all
 ```
 
-### 2. Start the bridge server
+Generate a high-entropy application token and keep it in a password manager or a gitignored `.env`:
 
 ```bash
-cd server
-bun install
-bun run start
+openssl rand -hex 32
 ```
 
-The server starts on `http://localhost:3456` by default.
+Start the production bridge from the repository root:
 
-### 3. Access from iPhone
+```bash
+CMUX_REMOTE_TOKEN='<generated token>' devenv shell -- bun run --cwd server start
+```
 
-Open `http://<your-host>:3456` in Safari and add to home screen.
+It serves the built client at `http://127.0.0.1:3456`.
+
+### Remote access with Tailscale
+
+The preferred mode is Tailscale Serve forwarding HTTPS traffic to the localhost bridge. Configure
+Serve for `http://127.0.0.1:3456`, then set `CMUX_REMOTE_ORIGIN` to the exact HTTPS origin shown by
+Tailscale before starting the bridge:
+
+```bash
+CMUX_REMOTE_TOKEN='<generated token>' \
+CMUX_REMOTE_ORIGIN='https://your-mac.your-tailnet.ts.net' \
+devenv shell -- bun run --cwd server start
+```
+
+Alternatively, bind explicitly to the Mac's Tailscale IPv4 address with `HOST=<tailscale-ip>` and
+open `http://<tailscale-ip>:3456`. This mode is HTTP and does not provide the HTTPS protection of
+Tailscale Serve, but it remains tailnet-only when the address is exact.
+
+On iPhone, connect Tailscale, open the HTTPS URL in Safari, sign in with the application token, then
+use Share → Add to Home Screen.
 
 ## Configuration
 
-| Environment Variable | Default | Description |
+| Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `3456` | Bridge server port |
-| `CMUX_SOCKET_PATH` | `~/Library/Application Support/cmux/cmux.sock` | cmux Unix socket path |
-| `CMUX_BIN_PATH` | `/Applications/cmux.app/Contents/Resources/bin/cmux` | cmux binary path |
+| `CMUX_REMOTE_TOKEN` | required | Application login secret; minimum 32 UTF-8 bytes |
+| `HOST` | `127.0.0.1` | Exact bridge bind address |
+| `PORT` | `3456` | Bridge port |
+| `CMUX_REMOTE_ORIGIN` | request origin | Exact external HTTP(S) origin, required behind an HTTPS proxy |
+| `CMUX_SOCKET_PATH` | current cmux state socket | Explicit cmux Unix socket |
+| `CMUX_SOCKET_PASSWORD` | unset | Password for an authenticated cmux socket |
+
+The socket resolver checks cmux's current `last-socket-path` and state socket before the legacy
+Application Support path. Secrets must remain outside Git; `.env` files are ignored.
 
 ## Development
 
-```bash
-# Terminal 1: Start the server in watch mode
-cd server && bun run dev
+For the proxied Vite development server, use this gitignored `.env`:
 
-# Terminal 2: Start the client dev server (with proxy to bridge server)
-cd client && bun run dev
+```dotenv
+CMUX_REMOTE_TOKEN=<generated token>
+CMUX_REMOTE_ORIGIN=http://localhost:5173
 ```
 
-The Vite dev server proxies `/ws` and `/health` to `localhost:3456`.
-
-### Running Tests
+Then run both processes:
 
 ```bash
-# Client tests
-cd client && bun run test
-
-# Server tests
-cd server && bun test
+devenv up
 ```
 
-## Architecture
+Open `http://localhost:5173`. Vite proxies `/auth`, `/health`, and `/ws` to the bridge.
 
-### Bridge Server (`server/`)
+Useful checks:
 
-Built with Bun + Hono. Handles:
+```bash
+devenv shell -- lint
+devenv shell -- test-all
+devenv shell -- typecheck
+devenv shell -- build-all
+devenv shell -- e2e-deps  # once per machine
+devenv shell -- e2e
+devenv shell -- check
+```
 
-- **WebSocket relay** — transparent JSON-RPC proxy between the PWA and cmux Unix socket
-- **CLI fallback** — some methods (e.g., `surface.read_text`) use the `cmux` CLI for reliability
-- **Static file serving** — serves the built PWA from `client/dist/`
-- **Health check** — `GET /health` returns server and cmux socket status
+`check` runs lint, unit/integration tests, typechecks, the production build, and deterministic
+Chromium plus iPhone WebKit E2E tests against a fake cmux socket.
 
-### PWA Client (`client/`)
+## Runtime behavior
 
-Built with React 19 + TypeScript + Vite. Components:
+The client loads the complete cmux workspace → pane → surface tree and lists every terminal surface.
+Lifecycle events trigger live rediscovery, with a slow visible-page refresh as fallback. Only the
+open terminal is read; polling adapts from 250 ms during activity to 5 seconds while idle and stops
+while the PWA is hidden.
 
-| Component | Role |
-|---|---|
-| `Terminal` | xterm.js terminal renderer |
-| `Header` | Workspace name + hamburger menu |
-| `Drawer` | Workspace list sidebar (responsive) |
-| `StatusBar` | Connection status indicator |
+Input is sent to an exact surface UUID and is never replayed after disconnect. The mobile toolbar
+provides Esc, Tab, one-shot Ctrl, Ctrl-C, Ctrl-D, Up, Down, and Enter. Browser surfaces are discovered
+by cmux but intentionally not exposed for control in Milestone 1.
 
-Hooks:
+## Real-device release checklist
 
-| Hook | Role |
-|---|---|
-| `useWebSocket` | Connection management with exponential backoff reconnect |
-| `useCmux` | cmux JSON-RPC wrapper |
-| `useGesture` | Hammer.js 2-finger gesture handling |
+Before marking a release live, use eight disposable terminal surfaces and verify:
+
+- complete discovery and terminal switching;
+- rapid bounded output and idle output;
+- typing, paste, Enter, Ctrl-C, selection, copy, and scroll preservation;
+- selected-surface closure returns to the dashboard;
+- iPhone lock/background for ten minutes and foreground recovery;
+- Tailscale disconnect/reconnect without a manual reload;
+- the Mac terminal grid returns to its prior size after leaving the PWA;
+- unauthenticated, wrong-Origin, oversized, and non-whitelisted requests fail.
+
+## Design documentation
+
+- [Architecture and milestone specification](docs/superpowers/specs/2026-09-13-cmux-remote-command-center-design.md)
+- [Implementation plan](docs/superpowers/plans/2026-09-13-reliable-mobile-terminal.md)
+- [Roadmap](docs/superpowers/ROADMAP.md)
 
 ## License
 
-[MIT](LICENSE)
+MIT. The original upstream copyright notice and license are preserved in [LICENSE](LICENSE).

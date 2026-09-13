@@ -117,7 +117,7 @@ export class CmuxEventStream {
       if (this.#stopped) return;
       const delay = RECONNECT_DELAYS[
         Math.min(reconnectAttempt, RECONNECT_DELAYS.length - 1)
-      ]!;
+      ] ?? 10_000;
       reconnectAttempt += 1;
       await this.#sleep(delay);
     }

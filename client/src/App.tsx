@@ -152,6 +152,7 @@ function CommandCenter({
         <>
           <Header title={selected.title} onBack={() => history.back()} />
           <Terminal
+            key={selectedId}
             content={polling.content}
             onInput={(text) => void sendText(text)}
             onKey={(key) => void sendKey(key)}

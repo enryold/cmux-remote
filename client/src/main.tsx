@@ -14,6 +14,8 @@ createRoot(root).render(
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js", { type: "module" });
+    void navigator.serviceWorker
+      .register("/sw.js", { type: "module" })
+      .catch(() => undefined);
   });
 }

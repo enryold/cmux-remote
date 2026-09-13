@@ -6,6 +6,7 @@ import {
   type AllowedMethod,
   type Capabilities,
   type ConnectionStatus,
+  type ServerMessage,
   type TreeSnapshot,
 } from "../lib/cmux-rpc";
 import { useWebSocket } from "./useWebSocket";
@@ -149,7 +150,7 @@ export function useCmux(
   );
 
   const handleMessage = useCallback((data: string) => {
-    let message;
+    let message: ServerMessage;
     try {
       message = parseServerMessage(data);
     } catch {

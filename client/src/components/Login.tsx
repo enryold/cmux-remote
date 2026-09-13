@@ -30,7 +30,6 @@ export function Login({ error, onLogin }: LoginProps) {
         <label htmlFor="access-token">Access token</label>
         <input
           autoComplete="current-password"
-          autoFocus
           id="access-token"
           onChange={(event) => setToken(event.target.value)}
           required

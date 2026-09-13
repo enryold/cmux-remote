@@ -18,6 +18,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      "/auth": {
+        target: "http://localhost:3456",
+      },
       "/ws": {
         target: "ws://localhost:3456",
         ws: true,

@@ -54,7 +54,12 @@ function cmuxError(value: unknown): CmuxRequestError {
       : "cmux_error";
   const message =
     typeof error.message === "string"
-      ? error.message.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 256)
+      ? Array.from(error.message, (character) => {
+          const code = character.charCodeAt(0);
+          return code < 32 || code === 127 ? " " : character;
+        })
+          .join("")
+          .slice(0, 256)
       : "cmux request failed";
   return new CmuxRequestError(code, message);
 }

@@ -351,7 +351,9 @@ function trailingUtf8Bytes(value: string, maximum: number): string {
   if (bytes.length <= maximum) return value;
 
   let start = bytes.length - maximum;
-  while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start += 1;
+  while (start < bytes.length && ((bytes[start] ?? 0) & 0xc0) === 0x80) {
+    start += 1;
+  }
   return new TextDecoder().decode(bytes.subarray(start));
 }
 

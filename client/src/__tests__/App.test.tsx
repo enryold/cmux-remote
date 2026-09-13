@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../hooks/useAuth", () => ({ useAuth: mocks.useAuth }));
 vi.mock("../hooks/useCmux", () => ({ useCmux: mocks.useCmux }));
 vi.mock("../components/Terminal", () => ({
-  Terminal: () => <div aria-label="Terminal">Terminal screen</div>,
+  Terminal: () => <section aria-label="Terminal">Terminal screen</section>,
 }));
 
 const auth = {

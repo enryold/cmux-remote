@@ -68,7 +68,8 @@ function respond(
 async function bootstrap(
   result: { current: ReturnType<typeof useCmux> },
 ): Promise<FakeWebSocket> {
-  const socket = FakeWebSocket.instances[0]!;
+  const socket = FakeWebSocket.instances[0];
+  if (!socket) throw new Error("missing fake WebSocket");
   act(() => {
     socket.open();
     socket.receive('{"type":"state","cmux":"connected"}');

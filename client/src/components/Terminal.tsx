@@ -123,7 +123,7 @@ export function Terminal(props: TerminalProps) {
       termRef.current = null;
       term.dispose();
     };
-  }, [props.surfaceId]);
+  }, []);
 
   useEffect(() => applySnapshotRef.current(props.content), [props.content]);
 
@@ -140,11 +140,10 @@ export function Terminal(props: TerminalProps) {
           Output may be stale
         </p>
       ) : null}
-      <div
+      <section
         aria-label="Terminal"
         className="terminal-container"
         ref={containerRef}
-        role="region"
       />
       <TerminalToolbar
         ctrlActive={ctrlActive}

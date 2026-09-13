@@ -41,6 +41,10 @@ export function useWebSocket({
 
   const connect = useCallback(() => {
     if (!enabled || unmountedRef.current) return;
+    if (!navigator.onLine) {
+      setStatus("disconnected");
+      return;
+    }
     if (
       socketRef.current?.readyState === WebSocket.OPEN ||
       socketRef.current?.readyState === WebSocket.CONNECTING
@@ -111,6 +115,18 @@ export function useWebSocket({
     return true;
   }, []);
 
+  const goOffline = useCallback(() => {
+    clearRetry();
+    const socket = socketRef.current;
+    if (socket) {
+      socket.onclose = null;
+      socket.onerror = null;
+      socket.close();
+      socketRef.current = null;
+    }
+    setStatus("disconnected");
+  }, [clearRetry]);
+
   useEffect(() => {
     unmountedRef.current = false;
     if (enabled) connectRef.current();
@@ -134,15 +150,17 @@ export function useWebSocket({
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") reconnectNow();
     };
+    window.addEventListener("offline", goOffline);
     window.addEventListener("online", reconnectNow);
     window.addEventListener("pageshow", reconnectNow);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      window.removeEventListener("offline", goOffline);
       window.removeEventListener("online", reconnectNow);
       window.removeEventListener("pageshow", reconnectNow);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [enabled, reconnectNow]);
+  }, [enabled, goOffline, reconnectNow]);
 
   return { status, send, reconnectNow };
 }

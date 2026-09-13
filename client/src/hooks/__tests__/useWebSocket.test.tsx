@@ -70,6 +70,24 @@ describe("useWebSocket", () => {
     expect(FakeWebSocket.instances).toHaveLength(1);
   });
 
+  it("marks the bridge disconnected while offline and reconnects on online", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() =>
+      useWebSocket({ url: "ws://test/ws", enabled: true, onMessage: vi.fn() }),
+    );
+    act(() => FakeWebSocket.instances[0]?.open());
+    expect(result.current.status).toBe("connected");
+
+    act(() => window.dispatchEvent(new Event("offline")));
+    expect(result.current.status).toBe("disconnected");
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    act(() => window.dispatchEvent(new Event("online")));
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(result.current.status).toBe("connecting");
+  });
+
   it("bounds reconnect delay with deterministic jitter", () => {
     expect(reconnectDelay(0, 0)).toBe(800);
     expect(reconnectDelay(20, 0.5)).toBe(30_000);
