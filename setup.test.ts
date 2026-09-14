@@ -291,7 +291,13 @@ describe("first-run setup orchestration", () => {
       let childAlive = true;
       try {
         parent.kill("SIGTERM");
-        expect(await parent.exited).not.toBe(0);
+        const parentExit = await Promise.race([
+          parent.exited,
+          Bun.sleep(2_000).then(() => {
+            throw new Error("foreground process did not exit after SIGTERM");
+          }),
+        ]);
+        expect(parentExit).not.toBe(0);
         await Bun.sleep(25);
         try {
           process.kill(childPid, 0);
