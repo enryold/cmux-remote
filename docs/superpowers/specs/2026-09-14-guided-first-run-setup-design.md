@@ -53,21 +53,26 @@ The wizard performs these steps in order:
    Tailscale IPv4 address. Auto-select a single match only after showing it for confirmation; use a
    numbered prompt when several matches exist. Stop with instructions when none exists.
 4. Propose `gibb.one/cap/cmux-remote` and accept an optional validated replacement.
-5. Create or reuse the pairing-mode configuration described below.
-6. Generate a grant whose source is the chosen iPhone IPv4 address, destination is the Mac
+5. Validate an existing pairing-mode configuration or prepare a new one without writing it yet.
+   Require the fixed loopback port used by Serve and reject values that the installed Serve CLI
+   cannot accept.
+6. Inspect `tailscale serve status --json` before showing a grant. Continue only when the HTTPS root
+   handler is absent or is an exact private, non-Funnel proxy to `http://127.0.0.1:3456` with the
+   chosen capability.
+7. Build the production PWA. Only after a successful build, create a new private configuration when
+   needed.
+8. Generate a grant whose source is the chosen iPhone IPv4 address, destination is the Mac
    Tailscale IPv4 address, port is `tcp:443`, and app capability is the chosen identifier with
    `{ "access": true }`.
-7. Copy the grant to the macOS clipboard, print the Tailscale policy-console URL and a readable copy,
+9. Copy the grant to the macOS clipboard, print the Tailscale policy-console URL and a readable copy,
    then wait for the human to confirm that it was saved. Clipboard failure is non-fatal because the
    same grant remains visible in the terminal.
-8. Build the production PWA.
-9. Inspect `tailscale serve status --json`. Reuse an exact HTTPS root proxy to
-   `http://127.0.0.1:3456` with the chosen capability. When no Serve configuration exists, install
-   that configuration. If a different handler already owns the HTTPS endpoint, stop without calling
-   `tailscale serve reset` or replacing it.
-10. Start the Bun bridge in the foreground with the generated environment. Its existing startup
-    message prints the six-digit, ten-minute pairing code.
-11. Tell the human to open the derived MagicDNS HTTPS URL from the selected iPhone, enter the code,
+10. Inspect Serve again after the human policy change. Reuse the exact handler or install it when
+    still absent. If it changed to a conflicting or public handler, stop, tell the human to remove
+    the new grant, and never reset or replace Serve.
+11. Start the Bun bridge in the foreground with the generated environment and forward termination
+    signals to it. Its existing startup message prints the six-digit, ten-minute pairing code.
+12. Tell the human to open the derived MagicDNS HTTPS URL from the selected iPhone, enter the code,
     and use Safari's Add to Home Screen action.
 
 On later launches the operator runs:
@@ -135,14 +140,16 @@ sections.
 
 - Invalid or missing Tailscale JSON, MagicDNS, IPv4 addresses, or iOS peers stops before changing
   local configuration.
-- User selections accept only displayed indexes; capability names use the same bounded syntax as
-  the server.
+- User selections accept only displayed indexes; capability names use the bounded syntax shared by
+  the server and installed Serve CLI.
 - The wizard never prints environment contents, cookie values, socket passwords, or the generated
   signing key.
 - Existing `.env` content is never replaced or merged implicitly.
 - Existing non-matching Serve configuration is never reset, cleared, or overwritten.
-- A failed build prevents Serve changes and server startup.
+- A failed build prevents `.env` creation, grant installation, Serve changes, and server startup.
 - A failed Serve command prevents server startup and preserves `.env` for a later retry.
+- A late Serve conflict stops before replacement and tells the human to remove the newly installed
+  grant.
 - Interrupting the foreground bridge terminates the child normally but leaves `.env` and the
   intended background Serve configuration intact.
 - No rollback deletes material the wizard did not create. Diagnostics name the failed step and the

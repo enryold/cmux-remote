@@ -138,7 +138,8 @@ describe("first-run setup helpers", () => {
 
 - [ ] **Step 2: Write failing Serve-classification tests**
 
-Add cases for empty, exact, and conflicting Serve state. The exact fixture must mirror the installed CLI:
+Add cases for empty, exact, and conflicting Serve state. Exact requires the HTTPS TCP listener and
+must reject Funnel exposure. The fixture must mirror the installed CLI:
 
 ```ts
 import { classifyServeStatus } from "./setup.js";
@@ -333,6 +334,7 @@ Define a dependency object with captured `logs`, `copied`, `commands`, fixed pro
 ```ts
 expect(commands).toEqual([
   ["tailscale", "status", "--json"],
+  ["tailscale", "serve", "status", "--json"],
   ["bun", "run", "--cwd", "client", "build"],
   ["tailscale", "serve", "status", "--json"],
   [
@@ -412,14 +414,16 @@ Define default dependencies around `node:readline/promises`, `Bun.spawn`, `proce
 1. reject non-darwin platforms;
 2. capture and parse `tailscale status --json`;
 3. confirm/select one displayed iOS peer;
-4. reuse valid pairing variables from an existing `.env`, or prompt capability and create it;
-5. copy and print the exact grant, print `https://login.tailscale.com/admin/acls/file`, and wait for
-   confirmation;
-6. run the client build and stop on nonzero exit;
-7. classify captured Serve status and either reuse, configure, or reject;
-8. log the derived HTTPS origin and pairing instruction without secrets;
-9. run the server in foreground with inherited stdio and the merged generated environment;
-10. propagate the server exit code and close the readline interface.
+4. reuse valid pairing variables from an existing `.env`, or prepare a validated capability and
+   secret without writing yet;
+5. preflight the exact HTTPS, non-Funnel Serve state and stop on conflict;
+6. run the client build and stop on nonzero exit before writing `.env` or showing a grant;
+7. create the new private `.env` when needed, copy and print the exact grant, print
+   `https://login.tailscale.com/admin/acls/file`, and wait for confirmation;
+8. recheck Serve and either reuse, configure, or reject with grant-removal instructions;
+9. log the derived HTTPS origin and pairing instruction without secrets;
+10. run the server in foreground with inherited stdio and the merged generated environment;
+11. forward termination signals, propagate the server exit code, and close readline.
 
 Execute the CLI only under:
 

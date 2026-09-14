@@ -36,13 +36,14 @@ devenv shell -- setup
 ```
 
 The wizard finds the Mac and visible iPhones in the current tailnet, asks you to select or confirm
-one phone, creates a private local configuration, and copies one narrow Tailscale grant. Accept the
-suggested capability by pressing Enter unless your deployment already uses another valid name.
+one phone, and checks that the HTTPS Serve route is safe to use. Accept the suggested capability by
+pressing Enter unless your deployment already uses another valid name. It then builds the PWA,
+creates a private local configuration, and copies one narrow Tailscale grant.
 
 When prompted, open the displayed Tailscale policy-console URL, add the copied object to the
 policy's `grants` array, save the policy, then return to the terminal and confirm. The wizard does
-not edit the remote policy itself. It builds the PWA, safely creates or reuses the matching
-Tailscale Serve route, and starts the bridge in the foreground.
+not edit the remote policy itself. It rechecks and safely creates or reuses the matching Tailscale
+Serve route, then starts the bridge in the foreground.
 
 On the selected iPhone, open the HTTPS URL printed by the wizard, enter the six-digit code printed
 by the server, then use Safari's Share → Add to Home Screen. The `*.ts.net` URL remains stable while
