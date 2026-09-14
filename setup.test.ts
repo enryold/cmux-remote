@@ -65,6 +65,7 @@ function setupDependencies(
     env?: Record<string, string>;
     phoneStatus?: string;
     serveStatus?: string;
+    serveStatuses?: string[];
     buildExitCode?: number;
     copyError?: Error;
   } = {},
@@ -74,6 +75,7 @@ function setupDependencies(
   const commandOptions: Array<Record<string, unknown>> = [];
   const copied: string[] = [];
   const logs: string[] = [];
+  const serveStatuses = [...(options.serveStatuses ?? [])];
   const run = async (args: string[], command: Record<string, unknown> = {}) => {
     commands.push(args);
     commandOptions.push(command);
@@ -81,7 +83,10 @@ function setupDependencies(
       return { exitCode: 0, stdout: options.phoneStatus ?? status };
     }
     if (args.join(" ") === "tailscale serve status --json") {
-      return { exitCode: 0, stdout: options.serveStatus ?? "{}" };
+      return {
+        exitCode: 0,
+        stdout: serveStatuses.shift() ?? options.serveStatus ?? "{}",
+      };
     }
     if (args.join(" ") === "bun run --cwd client build") {
       return { exitCode: options.buildExitCode ?? 0, stdout: "" };
@@ -216,6 +221,24 @@ describe("first-run setup helpers", () => {
       ),
     ).toBe("conflict");
   });
+
+  it("rejects matching handlers without HTTPS or with Funnel enabled", () => {
+    const expected = {
+      capability: DEFAULT_CAPABILITY,
+      origin: "https://cmux.tail1234.ts.net",
+    };
+    const missingHttps = JSON.parse(exactServeStatus);
+    delete missingHttps.TCP;
+    expect(classifyServeStatus(JSON.stringify(missingHttps), expected)).toBe(
+      "conflict",
+    );
+
+    const publicHandler = JSON.parse(exactServeStatus);
+    publicHandler.AllowFunnel = { "cmux.tail1234.ts.net:443": true };
+    expect(classifyServeStatus(JSON.stringify(publicHandler), expected)).toBe(
+      "conflict",
+    );
+  });
 });
 
 describe("first-run setup orchestration", () => {
@@ -255,6 +278,7 @@ describe("first-run setup orchestration", () => {
       expect(await runSetup(setup.dependencies)).toBe(0);
       expect(setup.commands).toEqual([
         ["tailscale", "status", "--json"],
+        ["tailscale", "serve", "status", "--json"],
         ["bun", "run", "--cwd", "client", "build"],
         ["tailscale", "serve", "status", "--json"],
         [
@@ -312,12 +336,38 @@ describe("first-run setup orchestration", () => {
       await expect(runSetup(setup.dependencies)).rejects.toThrow(
         "existing Tailscale Serve configuration",
       );
-      expect(setup.commands).not.toContainEqual([
-        "bun",
-        "run",
-        "--cwd",
-        "server",
-        "start",
+      expect(setup.commands).toEqual([
+        ["tailscale", "status", "--json"],
+        ["tailscale", "serve", "status", "--json"],
+      ]);
+      expect(setup.copied).toEqual([]);
+      await expect(readFile(join(root, ".env"), "utf8")).rejects.toThrow();
+    });
+  });
+
+  it("stops on a late Serve conflict and tells the operator to remove the grant", async () => {
+    await temporaryRoot(async (root) => {
+      const conflict = JSON.stringify({
+        TCP: { "443": { HTTPS: true } },
+        Web: {
+          "cmux.tail1234.ts.net:443": {
+            Handlers: { "/": { Proxy: "http://127.0.0.1:9999" } },
+          },
+        },
+      });
+      const setup = setupDependencies(root, {
+        serveStatuses: ["{}", conflict],
+      });
+
+      await expect(runSetup(setup.dependencies)).rejects.toThrow(
+        "remove the grant",
+      );
+      expect(setup.copied).toHaveLength(1);
+      expect(setup.commands.at(-1)).toEqual([
+        "tailscale",
+        "serve",
+        "status",
+        "--json",
       ]);
     });
   });
@@ -373,7 +423,7 @@ describe("first-run setup orchestration", () => {
     });
   });
 
-  it("does not inspect or mutate Serve after a failed build", async () => {
+  it("does not write config, show a grant, or mutate Serve after a failed build", async () => {
     await temporaryRoot(async (root) => {
       const setup = setupDependencies(root, { buildExitCode: 1 });
 
@@ -382,8 +432,11 @@ describe("first-run setup orchestration", () => {
       );
       expect(setup.commands).toEqual([
         ["tailscale", "status", "--json"],
+        ["tailscale", "serve", "status", "--json"],
         ["bun", "run", "--cwd", "client", "build"],
       ]);
+      expect(setup.copied).toEqual([]);
+      await expect(readFile(join(root, ".env"), "utf8")).rejects.toThrow();
     });
   });
 

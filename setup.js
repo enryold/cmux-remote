@@ -77,7 +77,9 @@ export function classifyServeStatus(raw, expected) {
 
   const host = `${new URL(expected.origin).hostname}:443`;
   const handler = status?.Web?.[host]?.Handlers?.["/"];
-  return handler?.Proxy === SERVE_TARGET &&
+  return status?.TCP?.["443"]?.HTTPS === true &&
+    status?.AllowFunnel?.[host] !== true &&
+    handler?.Proxy === SERVE_TARGET &&
     Array.isArray(handler.AcceptAppCaps) &&
     handler.AcceptAppCaps.length === 1 &&
     handler.AcceptAppCaps[0] === expected.capability
@@ -208,6 +210,7 @@ export async function runSetup(overrides = {}) {
 
     const envPath = join(root, ".env");
     let capability;
+    let newEnvValues;
     let serverEnv;
     if (existsSync(envPath)) {
       let config;
@@ -237,17 +240,45 @@ export async function runSetup(overrides = {}) {
         throw new Error("Invalid capability name");
       }
       const secret = Buffer.from(randomBytes(32)).toString("hex");
-      await createEnvFile(envPath, {
+      newEnvValues = {
         capability,
         origin: tailscale.origin,
         secret,
-      });
+      };
       serverEnv = {
         ...env,
         CMUX_REMOTE_TOKEN: secret,
         CMUX_REMOTE_ORIGIN: tailscale.origin,
         CMUX_REMOTE_TAILSCALE_CAPABILITY: capability,
       };
+    }
+
+    const inspectServe = async () =>
+      classifyServeStatus(
+        await checkedRun(
+          run,
+          ["tailscale", "serve", "status", "--json"],
+          { capture: true, cwd: root },
+          "Tailscale Serve status",
+        ),
+        { capability, origin: tailscale.origin },
+      );
+
+    if ((await inspectServe()) === "conflict") {
+      throw new Error(
+        "Refusing to continue because of the existing Tailscale Serve configuration",
+      );
+    }
+
+    await checkedRun(
+      run,
+      ["bun", "run", "--cwd", "client", "build"],
+      { cwd: root },
+      "client build",
+    );
+
+    if (newEnvValues) {
+      await createEnvFile(envPath, newEnvValues);
       log("Created a private .env configuration.");
     }
 
@@ -268,25 +299,10 @@ export async function runSetup(overrides = {}) {
       throw new Error("Tailscale policy was not confirmed");
     }
 
-    await checkedRun(
-      run,
-      ["bun", "run", "--cwd", "client", "build"],
-      { cwd: root },
-      "client build",
-    );
-
-    const serveStatus = classifyServeStatus(
-      await checkedRun(
-        run,
-        ["tailscale", "serve", "status", "--json"],
-        { capture: true, cwd: root },
-        "Tailscale Serve status",
-      ),
-      { capability, origin: tailscale.origin },
-    );
+    const serveStatus = await inspectServe();
     if (serveStatus === "conflict") {
       throw new Error(
-        "Refusing to replace the existing Tailscale Serve configuration",
+        "Tailscale Serve changed during setup; remove the grant you just added before retrying",
       );
     }
     if (serveStatus === "missing") {
