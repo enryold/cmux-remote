@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { loadConfig } from "../config";
+import { isCapabilityName, loadConfig } from "../config";
 
 const token = "a".repeat(32);
 
@@ -97,5 +97,12 @@ describe("loadConfig", () => {
         CMUX_REMOTE_PAIRING_CODE: "12345x",
       }),
     ).toThrow("six digits");
+  });
+
+  it("validates setup capability identifiers", () => {
+    expect(isCapabilityName("gibb.one/cap/cmux-remote")).toBe(true);
+    expect(isCapabilityName("tail1234.ts.net/cap/cmux-remote")).toBe(true);
+    expect(isCapabilityName("not-a-capability")).toBe(false);
+    expect(isCapabilityName(`example.com/${"x".repeat(256)}`)).toBe(false);
   });
 });
