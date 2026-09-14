@@ -161,6 +161,21 @@ describe("first-run setup helpers", () => {
     ).toThrow("IPv4");
   });
 
+  it("rejects malformed MagicDNS names before rendering an origin", () => {
+    expect(() =>
+      parseTailscaleStatus(
+        JSON.stringify({
+          BackendState: "Running",
+          Self: {
+            DNSName: "cmux.tail1234.ts.net.\nCMUX_REMOTE_TOKEN=bad",
+            TailscaleIPs: ["100.64.0.1"],
+          },
+          Peer: null,
+        }),
+      ),
+    ).toThrow("MagicDNS");
+  });
+
   it("renders one exact device grant", () => {
     expect(
       renderGrant({
@@ -260,7 +275,7 @@ describe("first-run setup orchestration", () => {
         stderr: "ignore",
         stdout: "ignore",
       });
-      let pidText;
+      let pidText: string | undefined;
       for (let attempt = 0; attempt < 100; attempt += 1) {
         try {
           pidText = await readFile(pidPath, "utf8");
@@ -526,6 +541,16 @@ describe("first-run setup orchestration", () => {
         "do not replace\n",
       );
       expect(setup.commands).toEqual([["tailscale", "status", "--json"]]);
+    });
+  });
+
+  it("rejects a bridge port that does not match the fixed Serve target", async () => {
+    await temporaryRoot(async (root) => {
+      const setup = setupDependencies(root, { env: { PORT: "9999" } });
+
+      await expect(runSetup(setup.dependencies)).rejects.toThrow("PORT=3456");
+      expect(setup.commands).toEqual([["tailscale", "status", "--json"]]);
+      await expect(readFile(join(root, ".env"), "utf8")).rejects.toThrow();
     });
   });
 

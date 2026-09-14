@@ -103,6 +103,7 @@ describe("loadConfig", () => {
     expect(isCapabilityName("gibb.one/cap/cmux-remote")).toBe(true);
     expect(isCapabilityName("tail1234.ts.net/cap/cmux-remote")).toBe(true);
     expect(isCapabilityName("not-a-capability")).toBe(false);
+    expect(isCapabilityName("example.com/cap/cmux_remote")).toBe(false);
     expect(isCapabilityName(`example.com/${"x".repeat(256)}`)).toBe(false);
   });
 });

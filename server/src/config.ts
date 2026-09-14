@@ -71,7 +71,7 @@ export function loadConfig(
 export function isCapabilityName(value: string): boolean {
   return (
     value.length <= 255 &&
-    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}\/[A-Za-z0-9][A-Za-z0-9._~/-]*$/.test(
+    /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}\/[A-Za-z0-9][A-Za-z0-9/-]*$/.test(
       value,
     )
   );

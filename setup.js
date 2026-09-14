@@ -29,6 +29,14 @@ export function parseTailscaleStatus(raw) {
     throw new Error("Tailscale status has no MagicDNS name or IPv4 address");
   }
 
+  const normalizedDnsName = dnsName.replace(/\.$/, "");
+  const origin = `https://${normalizedDnsName}`;
+  try {
+    if (new URL(origin).origin !== origin) throw new Error();
+  } catch {
+    throw new Error("Tailscale status has an invalid MagicDNS name");
+  }
+
   const phones = Object.values(status.Peer ?? {})
     .filter((peer) => peer?.OS === "iOS" && ipv4(peer.TailscaleIPs))
     .map((peer) => ({
@@ -43,7 +51,7 @@ export function parseTailscaleStatus(raw) {
 
   return {
     macIp,
-    origin: `https://${dnsName.replace(/\.$/, "")}`,
+    origin,
     phones,
   };
 }
@@ -240,6 +248,9 @@ export async function runSetup(overrides = {}) {
           "Existing .env is not a valid Tailscale pairing configuration; check CMUX_REMOTE_TOKEN, CMUX_REMOTE_ORIGIN, and CMUX_REMOTE_TAILSCALE_CAPABILITY",
         );
       }
+      if (config.port !== 3456) {
+        throw new Error("Guided setup requires PORT=3456");
+      }
       capability = config.tailscaleCapability;
       serverEnv = env;
       log("Reusing the existing private .env configuration.");
@@ -262,6 +273,17 @@ export async function runSetup(overrides = {}) {
         CMUX_REMOTE_ORIGIN: tailscale.origin,
         CMUX_REMOTE_TAILSCALE_CAPABILITY: capability,
       };
+      let config;
+      try {
+        config = loadConfig(serverEnv);
+      } catch {
+        throw new Error(
+          "Generated pairing configuration is invalid; check HOST, PORT, CMUX_REMOTE_ORIGIN, and CMUX_REMOTE_TAILSCALE_CAPABILITY",
+        );
+      }
+      if (config.port !== 3456) {
+        throw new Error("Guided setup requires PORT=3456");
+      }
     }
 
     const inspectServe = async () =>
