@@ -9,13 +9,19 @@ import { snapshotWithTwoWorkspaces, terminalA } from "../test/topology-fixture";
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useCmux: vi.fn(),
+  terminal: vi.fn(),
 }));
 
 vi.mock("../hooks/useAuth", () => ({ useAuth: mocks.useAuth }));
 vi.mock("../hooks/useCmux", () => ({ useCmux: mocks.useCmux }));
 vi.mock("../components/Terminal", () => ({
-  Terminal: () => <section aria-label="Terminal">Terminal screen</section>,
+  Terminal: (props: unknown) => {
+    mocks.terminal(props);
+    return <section aria-label="Terminal">Terminal screen</section>;
+  },
 }));
+
+const originalVisualViewport = window.visualViewport;
 
 const auth = {
   status: "authenticated" as const,
@@ -51,6 +57,11 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  document.documentElement.style.removeProperty("--app-height");
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: originalVisualViewport,
+  });
   vi.clearAllMocks();
 });
 
@@ -81,4 +92,39 @@ it("returns to the dashboard when cmux closes the selected surface", async () =>
     expect(screen.getByText("Terminal closed")).toBeTruthy(),
   );
   expect(screen.getByRole("heading", { name: "Terminals" })).toBeTruthy();
+});
+
+it("submits prompt text before the terminal Enter key", async () => {
+  const api = cmuxApi();
+  mocks.useCmux.mockReturnValue(api);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+
+  const terminal = mocks.terminal.mock.calls[
+    mocks.terminal.mock.calls.length - 1
+  ]?.[0] as {
+    onSubmit(text: string): Promise<boolean>;
+  };
+  await expect(terminal.onSubmit("continue the task")).resolves.toBe(true);
+
+  expect(api.sendText).toHaveBeenCalledWith(terminalA, "continue the task");
+  expect(api.sendKey).toHaveBeenCalledWith(terminalA, "enter");
+  expect(vi.mocked(api.sendText).mock.invocationCallOrder[0]).toBeLessThan(
+    vi.mocked(api.sendKey).mock.invocationCallOrder[0] as number,
+  );
+});
+
+it("leaves keyboard viewport sizing to CSS", () => {
+  Object.defineProperty(window, "visualViewport", {
+    configurable: true,
+    value: {
+      height: 320,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    },
+  });
+
+  render(<App />);
+
+  expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("");
 });

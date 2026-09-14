@@ -204,7 +204,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
       if (typeof surface !== "string" || typeof text !== "string" || !outputs.has(surface)) {
         fail(socket, request.id, "invalid_params");
       } else {
-        outputs.set(surface, `${outputs.get(surface)}${text.replaceAll("\r", "<enter>")}`);
+        outputs.set(surface, `${outputs.get(surface)}${text}`);
         reply(socket, request.id, { accepted: true });
       }
       return;

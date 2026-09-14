@@ -83,23 +83,6 @@ function CommandCenter({
     }
   }, [cmux.tree, selectedId]);
 
-  useEffect(() => {
-    const viewport = window.visualViewport;
-    if (!viewport) return;
-    const updateHeight = () => {
-      document.documentElement.style.setProperty(
-        "--app-height",
-        `${viewport.height}px`,
-      );
-    };
-    updateHeight();
-    viewport.addEventListener("resize", updateHeight);
-    return () => {
-      viewport.removeEventListener("resize", updateHeight);
-      document.documentElement.style.removeProperty("--app-height");
-    };
-  }, []);
-
   useEffect(
     () => () => {
       if (inputErrorTimer.current !== null) {
@@ -132,15 +115,23 @@ function CommandCenter({
 
   const sendKey = useCallback(
     async (key: AllowedKey) => {
-      if (!selectedId) return;
+      if (!selectedId) return false;
       try {
         await cmux.sendKey(selectedId, key);
         setInputError(null);
         polling.refreshNow();
+        return true;
       } catch {
         showInputError();
+        return false;
       }
     }, [cmux.sendKey, polling.refreshNow, selectedId, showInputError],
+  );
+
+  const submitPrompt = useCallback(
+    async (text: string) =>
+      (await sendText(text)) && (await sendKey("enter")),
+    [sendKey, sendText],
   );
 
   const connection: ConnectionStatus = terminalConnected
@@ -165,7 +156,7 @@ function CommandCenter({
             content={polling.content}
             onInput={(text) => void sendText(text)}
             onKey={(key) => void sendKey(key)}
-            onSubmit={(text) => sendText(`${text}\r`)}
+            onSubmit={submitPrompt}
             onViewport={(columns, rows, generation) => {
               void cmux
                 .reportViewport(selectedId, columns, rows, generation)
