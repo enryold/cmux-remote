@@ -21,11 +21,19 @@
 
   scripts.lint.exec = "bun run lint";
 
+  scripts.setup.exec = "bun setup.js";
+
+  scripts.start.exec = ''
+    build-all
+    bun run --cwd server start
+  '';
+
   scripts.e2e-deps.exec = "bunx playwright install chromium webkit";
 
   scripts.e2e.exec = "bun run e2e";
 
   scripts.test-all.exec = ''
+    bun test ./setup.test.ts
     bun run --cwd client test
     bun --cwd server test
   '';
@@ -51,7 +59,7 @@
     echo "cmux-remote development environment"
     echo "Bun:  $(bun --version)"
     echo "Node: $(node --version)"
-    echo "Commands: deps, lint, test-all, typecheck, build-all, e2e-deps, e2e, check, devenv up"
+    echo "Commands: deps, setup, start, lint, test-all, typecheck, build-all, e2e-deps, e2e, check, devenv up"
   '';
 
   enterTest = ''

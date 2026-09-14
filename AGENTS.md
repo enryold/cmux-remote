@@ -73,6 +73,8 @@ convenience:
 - Do not cache authentication, API, WebSocket, or terminal data in the service worker.
 - Prefer documented cmux APIs. Verify the installed CLI/socket contract before adopting recent or
   private methods.
+- `setup.js` may inspect local Tailscale state and configure a matching Serve route. It must never
+  edit remote tailnet policy, overwrite an existing `.env` or Serve route, or reveal `.env` values.
 
 ## Development environment
 
@@ -82,6 +84,9 @@ Use the repository devenv for Bun, Node, builds, tests, linters, and generators:
 devenv shell -- deps
 devenv up
 ```
+
+Use `devenv shell -- setup` for first-run one-iPhone pairing and `devenv shell -- start` for later
+production launches. The setup command leaves tailnet-policy changes for explicit human review.
 
 The development server is available at `http://localhost:5173`; Vite proxies protected routes to the
 Bun bridge. Runtime secrets belong in an ignored `.env`, as documented in `README.md`.

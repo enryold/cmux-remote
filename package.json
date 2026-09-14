@@ -2,7 +2,7 @@
   "name": "cmux-remote-tooling",
   "private": true,
   "scripts": {
-    "lint": "biome lint client/src server/src e2e playwright.config.ts",
+    "lint": "biome lint setup.js setup.test.ts client/src server/src e2e playwright.config.ts",
     "e2e": "bun run --cwd client build && playwright test"
   },
   "devDependencies": {

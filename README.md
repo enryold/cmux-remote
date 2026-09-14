@@ -17,6 +17,43 @@ cmux
 There is no required cloud service. This is not a web IDE, generic SSH endpoint, file manager, Git
 client, or remote browser.
 
+## Getting started
+
+The recommended setup authorizes one iPhone through Tailscale. The only credential you enter on the
+iPhone is a six-digit pairing code printed when the bridge starts.
+
+Prerequisites:
+
+- macOS with cmux running;
+- Tailscale connected to the same tailnet on the Mac and iPhone;
+- [devenv](https://devenv.sh/).
+
+From the repository root, install the locked dependencies and run the guided setup:
+
+```bash
+devenv shell -- deps
+devenv shell -- setup
+```
+
+The wizard finds the Mac and visible iPhones in the current tailnet, asks you to select or confirm
+one phone, creates a private local configuration, and copies one narrow Tailscale grant. Accept the
+suggested capability by pressing Enter unless your deployment already uses another valid name.
+
+When prompted, open the displayed Tailscale policy-console URL, add the copied object to the
+policy's `grants` array, save the policy, then return to the terminal and confirm. The wizard does
+not edit the remote policy itself. It builds the PWA, safely creates or reuses the matching
+Tailscale Serve route, and starts the bridge in the foreground.
+
+On the selected iPhone, open the HTTPS URL printed by the wizard, enter the six-digit code printed
+by the server, then use Safari's Share → Add to Home Screen. The `*.ts.net` URL remains stable while
+the Mac's Tailscale node name and tailnet DNS suffix remain unchanged.
+
+For later launches, rebuild the PWA and start the configured bridge with:
+
+```bash
+devenv shell -- start
+```
+
 ## Current status
 
 The current Milestone 1 build provides:
@@ -37,7 +74,9 @@ output, prompt submission, special keys, keyboard layout, and viewport cleanup. 
 gate runs client and server tests plus Chromium and iPhone WebKit E2E tests against a fake cmux
 socket. Repeat the real-device checklist below before tagging a release.
 
-## Security model
+## Security and advanced setup
+
+### Security model
 
 Controlling this app can be equivalent to controlling your Mac shell. The bridge therefore:
 
@@ -54,42 +93,11 @@ Controlling this app can be equivalent to controlling your Mac shell. The bridge
 Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. Device pairing is a second
 layer, not a replacement for a private tailnet policy.
 
-## Requirements
+### Manual one-iPhone pairing
 
-- macOS with cmux running;
-- [devenv](https://devenv.sh/) and direnv, or the Bun/Node versions described by `devenv.nix`;
-- Tailscale for remote access;
-- Safari on iPhone for Add to Home Screen.
-
-## Setup
-
-Install the locked dependencies and build the PWA:
-
-```bash
-devenv shell -- deps
-devenv shell -- build-all
-```
-
-Generate a high-entropy session-signing secret and keep it in a password manager or a gitignored
-`.env`:
-
-```bash
-openssl rand -hex 32
-```
-
-For local token mode, start the production bridge from the repository root:
-
-```bash
-CMUX_REMOTE_TOKEN='<generated token>' devenv shell -- bun run --cwd server start
-```
-
-It serves the built client at `http://127.0.0.1:3456`.
-
-### Pair one iPhone with Tailscale
-
-The preferred mode gives one iPhone a custom Tailscale app capability and requires a six-digit code
-on first use. The bridge still binds only to localhost, and Tailscale Serve strips spoofed capability
-headers before forwarding its trusted value.
+Use this path only when you need to configure the pieces without `setup.js`. Generate a high-entropy
+session-signing secret with `openssl rand -hex 32` and store it in the gitignored `.env` below. It is
+a server implementation detail, not a credential entered on the iPhone.
 
 Choose a capability under a domain you control and add a narrow rule to the tailnet policy. Tailscale
 IPs remain stable while each node remains registered.
@@ -124,14 +132,14 @@ CMUX_REMOTE_ORIGIN=https://cmux.your-tailnet.ts.net
 CMUX_REMOTE_TAILSCALE_CAPABILITY=example.com/cap/cmux-remote
 ```
 
-Build and start the bridge, then forward the same capability through Serve:
+Build the PWA, forward the capability through Serve, then start the bridge:
 
 ```bash
 devenv shell -- build-all
-devenv shell -- bun run --cwd server start
 tailscale serve --bg \
   --accept-app-caps=example.com/cap/cmux-remote \
   http://127.0.0.1:3456
+devenv shell -- bun run --cwd server start
 ```
 
 The bridge prints one six-digit code valid for ten minutes. It is consumed after a successful
@@ -140,10 +148,8 @@ pairing and locks after five failed attempts. Pairing creates a 365-day `HttpOnl
 WebSocket upgrade. Restart the bridge to obtain a fresh recovery code. Rotate
 `CMUX_REMOTE_TOKEN` or remove the tailnet grant to revoke access.
 
-On iPhone, connect Tailscale, open the HTTPS URL in Safari, enter the pairing code, then use Share →
-Add to Home Screen. The full `*.ts.net` URL remains stable while the Tailscale node name and tailnet
-DNS suffix remain unchanged. Do not substitute a `.local` hostname: it is an mDNS name and does not
-provide the trusted HTTPS origin required by the PWA.
+Do not substitute a `.local` hostname: it is an mDNS name and does not provide the trusted HTTPS
+origin required by the PWA.
 
 ### Token fallback
 
@@ -156,7 +162,7 @@ CMUX_REMOTE_ORIGIN='https://your-mac.your-tailnet.ts.net' \
 devenv shell -- bun run --cwd server start
 ```
 
-## Configuration
+### Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -233,6 +239,8 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 
 - [Architecture and milestone specification](docs/superpowers/specs/2026-09-13-cmux-remote-command-center-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-09-13-reliable-mobile-terminal.md)
+- [Guided first-run setup specification](docs/superpowers/specs/2026-09-14-guided-first-run-setup-design.md)
+- [Guided first-run setup plan](docs/superpowers/plans/2026-09-14-guided-first-run-setup.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
 - [Engineering guide for Codex and other coding agents](AGENTS.md)
 - [Claude Code entry point](CLAUDE.md)
