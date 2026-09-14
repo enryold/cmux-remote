@@ -17,6 +17,26 @@ cmux
 There is no required cloud service. This is not a web IDE, generic SSH endpoint, file manager, Git
 client, or remote browser.
 
+## Current status
+
+The current Milestone 1 build provides:
+
+- dynamic workspace, pane, and terminal-surface discovery without fixed names or counts;
+- a dense mobile dashboard with exact-surface navigation and browser back support;
+- xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
+- direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
+- a mobile key toolbar for Esc, Tab, one-shot Ctrl, Ctrl-C, Ctrl-D, Up, Down, and Enter;
+- adaptive output polling, topology event subscriptions, foreground refresh, and automatic reconnect;
+- coordinated terminal viewport sizing that is cleared when the remote terminal closes;
+- an installable dark-mode PWA with iPhone safe-area and software-keyboard handling;
+- localhost-only serving, exact-origin checks, a constrained RPC whitelist, and optional one-device
+  Tailscale pairing.
+
+The flow has been exercised from iPhone Safari over Tailscale for pairing, terminal switching,
+output, prompt submission, special keys, keyboard layout, and viewport cleanup. The deterministic
+gate runs client and server tests plus Chromium and iPhone WebKit E2E tests against a fake cmux
+socket. Repeat the real-device checklist below before tagging a release.
+
 ## Security model
 
 Controlling this app can be equivalent to controlling your Mac shell. The bridge therefore:
@@ -214,6 +234,8 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Architecture and milestone specification](docs/superpowers/specs/2026-09-13-cmux-remote-command-center-design.md)
 - [Implementation plan](docs/superpowers/plans/2026-09-13-reliable-mobile-terminal.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
+- [Engineering guide for Codex and other coding agents](AGENTS.md)
+- [Claude Code entry point](CLAUDE.md)
 
 The older files under `docs/` and `README.ja.md` describe the upstream prototype and are retained
 for history; they are not current deployment or security instructions.
