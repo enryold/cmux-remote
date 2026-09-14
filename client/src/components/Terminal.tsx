@@ -17,6 +17,7 @@ interface TerminalProps {
   viewportEnabled: boolean;
   onInput(text: string): void;
   onKey(key: AllowedKey): void;
+  onSubmit(text: string): Promise<boolean>;
   onViewport(columns: number, rows: number, generation: number): void;
   onViewportClear(generation: number): void;
 }
@@ -153,6 +154,7 @@ export function Terminal(props: TerminalProps) {
           focus();
         }}
         onKey={sendKey}
+        onSubmit={props.onSubmit}
       />
     </main>
   );

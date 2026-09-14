@@ -225,6 +225,42 @@ button {
   color: #ffc2c7;
 }
 
+.terminal-controls {
+  flex: none;
+  background: #171b24;
+}
+
+.terminal-composer {
+  display: flex;
+  gap: 6px;
+  padding: 6px max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left));
+  border-top: 1px solid #272b35;
+}
+
+.terminal-composer input,
+.terminal-composer button {
+  min-height: 44px;
+  border: 1px solid #3a414f;
+  border-radius: 8px;
+}
+
+.terminal-composer input {
+  min-width: 0;
+  flex: 1;
+  padding: 0 11px;
+  background: #10131a;
+  color: #e5e7eb;
+}
+
+.terminal-composer button {
+  padding: 0 14px;
+  background: #354b70;
+}
+
+.terminal-composer button:disabled {
+  opacity: 0.5;
+}
+
 .terminal-toolbar {
   display: flex;
   flex: none;

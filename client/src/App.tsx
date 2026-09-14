@@ -117,13 +117,15 @@ function CommandCenter({
 
   const sendText = useCallback(
     async (text: string) => {
-      if (!selectedId) return;
+      if (!selectedId) return false;
       try {
         await cmux.sendText(selectedId, text);
         setInputError(null);
         polling.refreshNow();
+        return true;
       } catch {
         showInputError();
+        return false;
       }
     }, [cmux.sendText, polling.refreshNow, selectedId, showInputError],
   );
@@ -163,6 +165,7 @@ function CommandCenter({
             content={polling.content}
             onInput={(text) => void sendText(text)}
             onKey={(key) => void sendKey(key)}
+            onSubmit={(text) => sendText(`${text}\r`)}
             onViewport={(columns, rows, generation) => {
               void cmux
                 .reportViewport(selectedId, columns, rows, generation)

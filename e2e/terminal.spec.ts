@@ -8,6 +8,12 @@ test("reads, types, sends mobile keys, and switches exact surfaces", async ({ pa
   const accessibleText = terminal.locator(".xterm-accessibility-tree");
   await expect(accessibleText).toContainText("api ready");
 
+  const composer = page.getByRole("textbox", { name: "Prompt or command" });
+  await composer.fill("continue the task");
+  await composer.press("Enter");
+  await expect(composer).toHaveValue("");
+  await expect(accessibleText).toContainText("continue the task<enter>");
+
   await terminal.locator(".xterm-helper-textarea").focus();
   await page.keyboard.type("status");
   await page.getByRole("button", { name: "Enter" }).click();
