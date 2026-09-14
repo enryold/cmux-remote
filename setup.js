@@ -104,7 +104,7 @@ export async function createEnvFile(path, values) {
   }
 }
 
-async function runCommand(args, options = {}) {
+export async function runCommand(args, options = {}) {
   const child = Bun.spawn(args, {
     cwd: options.cwd,
     env: options.env,
@@ -115,7 +115,18 @@ async function runCommand(args, options = {}) {
   const stdout = options.capture
     ? new Response(child.stdout).text()
     : Promise.resolve("");
-  return { exitCode: await child.exited, stdout: await stdout };
+  const handlers = options.foreground
+    ? ["SIGINT", "SIGTERM"].map((signal) => [
+        signal,
+        () => child.kill(signal),
+      ])
+    : [];
+  for (const [signal, handler] of handlers) process.on(signal, handler);
+  try {
+    return { exitCode: await child.exited, stdout: await stdout };
+  } finally {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  }
 }
 
 async function copyToClipboard(value) {

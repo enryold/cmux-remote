@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   classifyServeStatus,
   createEnvFile,
@@ -242,6 +243,54 @@ describe("first-run setup helpers", () => {
 });
 
 describe("first-run setup orchestration", () => {
+  it("forwards termination signals to the foreground server", async () => {
+    await temporaryRoot(async (root) => {
+      const pidPath = join(root, "child.pid");
+      const setupUrl = pathToFileURL(join(import.meta.dir, "setup.js")).href;
+      const childScript = `await Bun.write(${JSON.stringify(pidPath)}, String(process.pid)); setInterval(() => {}, 1000);`;
+      const parentScript = `
+        const { runCommand } = await import(${JSON.stringify(setupUrl)});
+        const result = await runCommand(
+          [${JSON.stringify(process.execPath)}, "-e", ${JSON.stringify(childScript)}],
+          { foreground: true },
+        );
+        process.exit(result.exitCode);
+      `;
+      const parent = Bun.spawn([process.execPath, "-e", parentScript], {
+        stderr: "ignore",
+        stdout: "ignore",
+      });
+      let pidText;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        try {
+          pidText = await readFile(pidPath, "utf8");
+          break;
+        } catch {
+          await Bun.sleep(10);
+        }
+      }
+
+      expect(pidText).toBeDefined();
+      if (!pidText) return;
+      const childPid = Number(pidText);
+      let childAlive = true;
+      try {
+        parent.kill("SIGTERM");
+        expect(await parent.exited).not.toBe(0);
+        await Bun.sleep(25);
+        try {
+          process.kill(childPid, 0);
+        } catch {
+          childAlive = false;
+        }
+        expect(childAlive).toBe(false);
+      } finally {
+        if (parent.exitCode === null) parent.kill("SIGKILL");
+        if (childAlive) process.kill(childPid, "SIGKILL");
+      }
+    });
+  });
+
   it("creates a private env file without replacing its secret", async () => {
     await temporaryRoot(async (root) => {
       const path = join(root, ".env");
