@@ -17,7 +17,7 @@ Rows are historical and are never deleted when work ships or is removed.
 
 | Feature | Brief description | Spec file | Created | Developed | Live | Removed |
 |---------|-------------------|-----------|---------|-----------|------|---------|
-| Milestone 1 — Reliable mobile terminal | Securely discover every live terminal, open it from an iPhone PWA, read and send input, and recover after background or network changes. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
-| Device-bound Tailscale pairing | Allow one Tailscale-authorized iPhone to pair once with a short code while preserving the application session boundary. | [Spec](specs/2026-09-14-device-bound-pairing-design.md) | 2026-09-14 | — | — | — |
+| Milestone 1 — Reliable mobile terminal | Securely discover every live terminal, open it from an iPhone PWA, read and send input, and recover after background or network changes. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | 2026-09-14 | — | — |
+| Device-bound Tailscale pairing | Allow one Tailscale-authorized iPhone to pair once with a short code while preserving the application session boundary. | [Spec](specs/2026-09-14-device-bound-pairing-design.md) | 2026-09-14 | 2026-09-14 | 2026-09-14 | — |
 | Milestone 2 — Agent dashboard | Enrich live surfaces with activity, previews, notifications, and conservative Codex/Claude lifecycle state. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
 | Milestone 3 — Browser awareness | Identify browser surfaces and show their title and URL without turning the PWA into a remote browser. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
