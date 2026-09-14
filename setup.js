@@ -1,6 +1,7 @@
 import { randomBytes as secureRandomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { open } from "node:fs/promises";
+import { isIPv4 } from "node:net";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { isCapabilityName, loadConfig } from "./server/src/config.ts";
@@ -11,7 +12,8 @@ export const SERVE_TARGET = "http://127.0.0.1:3456";
 const ipv4 = (values) =>
   Array.isArray(values)
     ? values.find(
-        (value) => typeof value === "string" && /^100\./.test(value),
+        (value) =>
+          typeof value === "string" && value.startsWith("100.") && isIPv4(value),
       )
     : undefined;
 

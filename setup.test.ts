@@ -140,6 +140,21 @@ describe("first-run setup helpers", () => {
     expect(parseTailscaleStatus(empty).phones).toEqual([]);
   });
 
+  it("rejects malformed Tailscale IPv4 values", () => {
+    expect(() =>
+      parseTailscaleStatus(
+        JSON.stringify({
+          BackendState: "Running",
+          Self: {
+            DNSName: "cmux.tail1234.ts.net.",
+            TailscaleIPs: ["100.not-an-ip"],
+          },
+          Peer: null,
+        }),
+      ),
+    ).toThrow("IPv4");
+  });
+
   it("renders one exact device grant", () => {
     expect(
       renderGrant({
