@@ -197,11 +197,14 @@ button {
 .terminal-container {
   min-height: 0;
   flex: 1;
-  padding: 6px 4px 0;
   overflow: hidden;
   touch-action: pan-y;
   user-select: text;
   -webkit-user-select: text;
+}
+
+.terminal-container > .xterm {
+  padding: 6px 4px 0;
 }
 
 .terminal-stale,

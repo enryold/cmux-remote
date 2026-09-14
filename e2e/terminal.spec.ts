@@ -29,3 +29,21 @@ test("reads, types, sends mobile keys, and switches exact surfaces", async ({ pa
   await expect(nextText).toContainText("ui ready");
   await expect(nextText).not.toContainText("status<enter>");
 });
+
+test("keeps the final terminal row above the mobile controls", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 647 });
+  await login(page);
+  await page.getByRole("button", { name: "API Agent" }).click();
+
+  const terminal = page.getByRole("region", { name: "Terminal" });
+  await expect(terminal.locator(".xterm-accessibility-tree")).toContainText("api ready");
+
+  await expect
+    .poll(async () => {
+      const container = await terminal.boundingBox();
+      const screen = await terminal.locator(".xterm-screen").boundingBox();
+      if (!container || !screen) return Number.POSITIVE_INFINITY;
+      return screen.y + screen.height - (container.y + container.height);
+    })
+    .toBeLessThanOrEqual(0);
+});
