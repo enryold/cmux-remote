@@ -55,6 +55,39 @@ For later launches, rebuild the PWA and start the configured bridge with:
 devenv shell -- start
 ```
 
+### Start automatically on this Mac
+
+On macOS, build once and install a per-user LaunchAgent. It starts after login, when cmux and
+Tailscale can run in the user session. The installer requires an existing private `.env` and never
+changes Tailscale Serve or tailnet policy.
+
+```bash
+devenv shell -- build-all
+sh scripts/install-launch-agent.sh
+```
+
+The bridge retries three failed process exits after 2, 4, and 8 seconds, then stops until the next
+login or a manual restart. A clean exit does not retry. The bridge's own cmux connection already
+reconnects after sleep or network loss while the process stays alive. Control the agent with:
+
+```bash
+devenv shell -- service-start
+devenv shell -- service-stop
+devenv shell -- service-restart
+```
+
+The agent discards startup output because it contains a short pairing code. To pair the authorized
+iPhone, run:
+
+```bash
+devenv shell -- pair
+```
+
+Enter the displayed code on the iPhone, then press Ctrl-C. The command restarts the LaunchAgent.
+The paired cookie survives bridge and Mac restarts for up to 365 days while `.env` remains unchanged.
+If Safari removes the cookie or the signing secret changes, pair again. To disable automatic startup,
+unload the agent and remove its plist from `~/Library/LaunchAgents`.
+
 ## Current status
 
 The current Milestone 1 build provides:
