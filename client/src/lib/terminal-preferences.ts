@@ -37,8 +37,11 @@ function exact(value: Record<string, unknown>, keys: string[]) {
 }
 export function validCommand(value: unknown): value is TerminalPreferences["commands"][number] {
   return record(value) && exact(value, ["id", "label", "text"]) && typeof value.id === "string" && uuid.test(value.id)
-    && typeof value.label === "string" && value.label.trim().length > 0 && [...value.label].length <= 40 && !/[\u0000-\u001f\u007f]/.test(value.label)
-    && typeof value.text === "string" && value.text.trim().length > 0 && encoder.encode(value.text).length <= 4096 && !/[\u0000-\u001f\u007f\u2028\u2029]/.test(value.text);
+    && typeof value.label === "string" && value.label.trim().length > 0 && [...value.label].length <= 40 && !hasControl(value.label)
+    && typeof value.text === "string" && value.text.trim().length > 0 && encoder.encode(value.text).length <= 4096 && !hasControl(value.text) && !/[\u2028\u2029]/.test(value.text);
+}
+function hasControl(text: string): boolean {
+  return [...text].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
 }
 export function shortcutId(shortcut: ShortcutRef): string {
   return shortcut.kind === "key" ? `key:${shortcut.key}` : `command:${shortcut.commandId}`;

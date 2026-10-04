@@ -96,7 +96,7 @@ The current Milestone 1 build provides:
 - a dense mobile dashboard with exact-surface navigation and browser back support;
 - xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
 - direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
-- a mobile key toolbar for Esc, Tab, one-shot Ctrl, Ctrl-C, Ctrl-D, Up, Down, and Enter;
+- a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab) and saved commands;
 - adaptive output polling, topology event subscriptions, foreground refresh, and automatic reconnect;
 - coordinated terminal viewport sizing that is cleared when the remote terminal closes;
 - an installable dark-mode PWA with iPhone safe-area and software-keyboard handling;
@@ -252,8 +252,11 @@ Lifecycle events trigger live rediscovery, with a slow visible-page refresh as f
 open terminal is read; polling adapts from 250 ms during activity to 5 seconds while idle and stops
 while the PWA is hidden.
 
-Input is sent to an exact surface UUID and is never replayed after disconnect. The mobile toolbar
-provides Esc, Tab, one-shot Ctrl, Ctrl-C, Ctrl-D, Up, Down, and Enter. Browser surfaces are discovered
+Input is sent to an exact surface UUID and is never replayed after disconnect. Open **Shortcuts** to
+add, edit, or delete up to 20 single-line commands and choose up to 12 favorites for the toolbar.
+Preferences stay on this device. Saved commands send text followed by a real Enter to the open
+terminal. Ctrl-C interrupts a process; Ctrl-D ends input and may close a shell. Both are optional
+catalogue entries. Physical Ctrl input remains available. Browser surfaces are discovered
 by cmux but intentionally not exposed for control in Milestone 1.
 
 ## Real-device release checklist

@@ -302,7 +302,7 @@ export function useCmux(
   );
 
   useEffect(() => {
-    if (bridgeStatus !== "connected") {
+    if (bridgeStatus !== "connected" || connectionGeneration !== connectionRef.current.generation) {
       setCmuxStatus("disconnected");
       setCapabilities([]);
       for (const pending of pendingRef.current.values()) {

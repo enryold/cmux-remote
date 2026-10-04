@@ -9,50 +9,41 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TerminalToolbar } from "../TerminalToolbar";
+import { useTerminalPreferences } from "../../hooks/useTerminalPreferences";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.clear(); });
+function Toolbar(props: Pick<Parameters<typeof TerminalToolbar>[0], "onKey" | "onSubmit">) {
+  return <TerminalToolbar {...props} connected settings={useTerminalPreferences()} />;
+}
 
 it("maps every named key to the exact cmux key", () => {
   const onKey = vi.fn();
-  render(<TerminalToolbar onKey={onKey} onSubmit={vi.fn()} />);
+  render(<Toolbar onKey={onKey} onSubmit={vi.fn()} />);
 
-  for (const name of ["Esc", "Tab", "Ctrl-C", "Ctrl-D", "Up", "Down", "Enter"]) {
+  for (const name of ["Esc", "Tab", "←", "→", "↑", "↓", "Shift+←", "Enter"]) {
     fireEvent.click(screen.getByRole("button", { name }));
   }
   expect(onKey.mock.calls.map(([key]) => key)).toEqual([
     "escape",
     "tab",
-    "ctrl+c",
-    "ctrl+d",
+    "left",
+    "right",
     "up",
     "down",
+    "shift+left",
     "enter",
   ]);
 });
 
-it("exposes the generic Ctrl key as a one-shot toggle", () => {
-  const onCtrl = vi.fn();
-  const { rerender } = render(
-    <TerminalToolbar
-      ctrlActive={false}
-      onCtrl={onCtrl}
-      onKey={vi.fn()}
-      onSubmit={vi.fn()}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Ctrl" }));
-  expect(onCtrl).toHaveBeenCalledOnce();
-
-  rerender(
-    <TerminalToolbar
-      ctrlActive
-      onCtrl={onCtrl}
-      onKey={vi.fn()}
-      onSubmit={vi.fn()}
-    />,
-  );
-  expect(screen.getByRole("button", { name: "Ctrl" }).getAttribute("aria-pressed"))
-    .toBe("true");
+it("offers Ctrl-C and Ctrl-D through the shortcuts catalogue", () => {
+  render(<Toolbar onKey={vi.fn()} onSubmit={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Ctrl" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Ctrl-C" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Ctrl-D" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
+  expect(screen.getByRole("dialog", { name: "Shortcuts" })).toBeTruthy();
+  expect(screen.getByText("Interrupt the current process")).toBeTruthy();
+  expect(screen.getByText("End input; may close a shell")).toBeTruthy();
 });
 
 it("submits a visible prompt and clears it only after accepted", async () => {
@@ -60,7 +51,7 @@ it("submits a visible prompt and clears it only after accepted", async () => {
     .fn()
     .mockResolvedValueOnce("text_unconfirmed")
     .mockResolvedValueOnce("accepted");
-  render(<TerminalToolbar onKey={vi.fn()} onSubmit={onSubmit} />);
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} />);
 
   const input = screen.getByRole("textbox", { name: "Prompt or command" });
   expect(input.getAttribute("enterkeyhint")).toBe("send");
@@ -76,7 +67,7 @@ it("submits a visible prompt and clears it only after accepted", async () => {
 
 it("sends empty Return once and keeps composing Return local", async () => {
   const onSubmit = vi.fn().mockResolvedValue("accepted");
-  render(<TerminalToolbar onKey={vi.fn()} onSubmit={onSubmit} />);
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} />);
   const input = screen.getByRole("textbox", { name: "Prompt or command" });
   fireEvent.compositionStart(input);
   fireEvent.keyDown(input, { key: "Enter", isComposing: true });

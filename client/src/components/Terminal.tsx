@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import type { useTerminalPreferences } from "../hooks/useTerminalPreferences";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -6,7 +7,6 @@ import type { AllowedKey } from "../lib/cmux-rpc";
 import { normalizeTerminalInput, type SubmitResult, type TerminalInput } from "../lib/terminal-input";
 import {
   cleanTerminalSnapshot,
-  controlText,
   restoredViewportLine,
 } from "../lib/terminal";
 import { TerminalToolbar } from "./TerminalToolbar";
@@ -16,6 +16,8 @@ interface TerminalProps {
   content: string;
   stale: boolean;
   viewportEnabled: boolean;
+  connected: boolean;
+  settings: ReturnType<typeof useTerminalPreferences>;
   onInput(input: TerminalInput): void;
   onKey(key: AllowedKey): void;
   onSubmit(text: string): Promise<SubmitResult>;
@@ -28,8 +30,6 @@ export function Terminal(props: TerminalProps) {
   const termRef = useRef<XTerm | null>(null);
   const applySnapshotRef = useRef<(content: string) => void>(() => undefined);
   const callbacksRef = useRef(props);
-  const ctrlRef = useRef(false);
-  const [ctrlActive, setCtrlActive] = useState(false);
   callbacksRef.current = props;
 
   useEffect(() => {
@@ -93,15 +93,6 @@ export function Terminal(props: TerminalProps) {
     applySnapshotRef.current = applySnapshot;
 
     term.onData((data) => {
-      if (ctrlRef.current && data.length === 1) {
-        const controlled = controlText(data);
-        if (controlled !== null) {
-          ctrlRef.current = false;
-          setCtrlActive(false);
-          callbacksRef.current.onInput({ kind: "text", text: controlled });
-          return;
-        }
-      }
       callbacksRef.current.onInput(normalizeTerminalInput(data, { composing, paste: pasting }));
     });
     term.onSelectionChange(() => {
@@ -159,12 +150,8 @@ export function Terminal(props: TerminalProps) {
         ref={containerRef}
       />
       <TerminalToolbar
-        ctrlActive={ctrlActive}
-        onCtrl={() => {
-          ctrlRef.current = !ctrlRef.current;
-          setCtrlActive(ctrlRef.current);
-          focus();
-        }}
+        connected={props.connected}
+        settings={props.settings}
         onKey={sendKey}
         onSubmit={props.onSubmit}
       />

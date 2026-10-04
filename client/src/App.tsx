@@ -7,6 +7,7 @@ import { Terminal } from "./components/Terminal";
 import { useAuth } from "./hooks/useAuth";
 import { useCmux } from "./hooks/useCmux";
 import { useTerminalPolling } from "./hooks/useTerminalPolling";
+import { useTerminalPreferences } from "./hooks/useTerminalPreferences";
 import type { ConnectionStatus } from "./lib/cmux-rpc";
 import { createTerminalInputDispatcher, submissionError, type TerminalInput } from "./lib/terminal-input";
 import {
@@ -46,15 +47,16 @@ function CommandCenter({
   logout(): Promise<void>;
 }) {
   const cmux = useCmux({ onUnauthorized: expire });
+  const settings = useTerminalPreferences();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
   const selectionRef = useRef({ id: selectedId, revision: 0 });
   if (selectionRef.current.id !== selectedId) selectionRef.current = { id: selectedId, revision: selectionRef.current.revision + 1 };
-  const selectSurface = (id: string | null) => {
+  const selectSurface = useCallback((id: string | null) => {
     selectionRef.current = { id, revision: selectionRef.current.revision + 1 };
     setSelectedId(id);
-  };
+  }, []);
   const apiRef = useRef(cmux);
   apiRef.current = cmux;
   const inputErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,7 +80,7 @@ function CommandCenter({
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [selectSurface]);
 
   useEffect(() => {
     if (
@@ -90,7 +92,7 @@ function CommandCenter({
       if (history.state?.surfaceId) history.back();
       else history.replaceState(null, "", location.pathname);
     }
-  }, [cmux.tree, selectedId]);
+  }, [cmux.tree, selectedId, selectSurface]);
 
   useEffect(
     () => () => {
@@ -112,7 +114,7 @@ function CommandCenter({
     const revision = selectionRef.current.revision;
     return createTerminalInputDispatcher({
       sendText: cmux.sendText, sendKey: cmux.sendKey,
-      isCurrent: (id, capturedGeneration) => selectionRef.current.id === id
+      isCurrent: (id, capturedGeneration) => id === selectedId && capturedGeneration === generation && selectionRef.current.id === id
         && selectionRef.current.revision === revision && apiRef.current.isConnectionCurrent(capturedGeneration),
     });
   }, [selectedId, generation, cmux.sendText, cmux.sendKey]);
@@ -153,6 +155,8 @@ function CommandCenter({
           <Terminal
             key={selectedId}
             content={polling.content}
+            connected={terminalConnected}
+            settings={settings}
             onInput={(input) => void sendInput(input)}
             onKey={(key) => void sendInput({ kind: "key", key })}
             onSubmit={submitPrompt}

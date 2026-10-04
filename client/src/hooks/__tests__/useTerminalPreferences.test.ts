@@ -9,7 +9,7 @@ describe("device preferences", () => {
   it("saves, reloads, and removes favorites when deleting commands", () => {
     const { result, unmount } = renderHook(useTerminalPreferences);
     act(() => expect(result.current.saveCommand({ label: "Launch", text: "claude-dsp" })).toBe(true));
-    const id = result.current.preferences.commands[0].id;
+    const id = result.current.preferences.commands[0]?.id as string;
     act(() => result.current.toggleFavorite({ kind: "command", commandId: id }));
     act(() => result.current.setFontSize(17));
     unmount();

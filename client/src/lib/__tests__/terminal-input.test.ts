@@ -24,7 +24,7 @@ describe("terminal input", () => {
     await expect(submit).resolves.toBe("accepted");
     await typed;
     expect(sendKey).toHaveBeenCalledWith("original", "enter");
-    expect(sendKey.mock.invocationCallOrder[0]).toBeLessThan(sendText.mock.invocationCallOrder[1]);
+    expect(sendKey.mock.invocationCallOrder[0]).toBeLessThan(sendText.mock.invocationCallOrder[1] as number);
   });
   it("never sends Enter after failed text, or retries after an unconfirmed Enter", async () => {
     const sendText = vi.fn().mockRejectedValueOnce(new Error("lost")).mockResolvedValue(undefined);
