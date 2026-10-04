@@ -204,7 +204,10 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
       if (typeof surface !== "string" || typeof text !== "string" || !outputs.has(surface)) {
         fail(socket, request.id, "invalid_params");
       } else {
-        outputs.set(surface, `${outputs.get(surface)}${text}`);
+        if (text === "fixture:scroll") outputs.set(surface, Array.from({ length: 2000 }, (_, i) => `history ${i}`).join("\n"));
+        else if (text === "fixture:append") outputs.set(surface, `${outputs.get(surface)}\n${Array.from({ length: 20 }, (_, i) => `latest append ${i}`).join("\n")}`);
+        else if (text === "fixture:replace") outputs.set(surface, `${outputs.get(surface)?.split("\n").slice(0, -1).join("\n")}\nprompt replaced`);
+        else outputs.set(surface, `${outputs.get(surface)}${text}`);
         reply(socket, request.id, { accepted: true });
       }
       return;

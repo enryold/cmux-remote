@@ -259,6 +259,10 @@ terminal. Ctrl-C interrupts a process; Ctrl-D ends input and may close a shell. 
 catalogue entries. Physical Ctrl input remains available. Browser surfaces are discovered
 by cmux but intentionally not exposed for control in Milestone 1.
 
+Terminal snapshots are coalesced while a write, touch gesture, or selection is active. Appended
+output keeps the same xterm buffer; changed prompts retain the visible history where it remains
+available. **Latest** returns to the bottom without sending input to cmux.
+
 ## Real-device release checklist
 
 Before marking a release live, use eight disposable terminal surfaces and verify:

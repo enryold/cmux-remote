@@ -7,7 +7,7 @@ import type { AllowedKey } from "../lib/cmux-rpc";
 import { normalizeTerminalInput, type SubmitResult, type TerminalInput } from "../lib/terminal-input";
 import {
   cleanTerminalSnapshot,
-  restoredViewportLine,
+  snapshotUpdate,
 } from "../lib/terminal";
 import { TerminalToolbar } from "./TerminalToolbar";
 
@@ -58,10 +58,14 @@ export function Terminal(props: TerminalProps) {
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let applied: string | null = null;
     let pending: string | null = null;
+    let writing = false;
+    let disposed = false;
+    let touching = false;
+    let gestureRevision = 0;
     let composing = false;
     let pasting = false;
     const startComposition = () => { composing = true; };
-    const endComposition = () => { setTimeout(() => { composing = false; }, 0); };
+    const endComposition = () => { queueMicrotask(() => { composing = false; }); };
     const paste = () => { pasting = true; queueMicrotask(() => { pasting = false; }); };
     container.addEventListener("compositionstart", startComposition);
     container.addEventListener("compositionend", endComposition);
@@ -69,34 +73,57 @@ export function Terminal(props: TerminalProps) {
 
     const applySnapshot = (raw: string) => {
       const next = cleanTerminalSnapshot(raw);
-      if (next === applied) return;
-      if (term.hasSelection()) {
-        pending = next;
-        return;
-      }
+      pending = next;
+      flushSnapshot();
+    };
+    const flushSnapshot = () => {
+      if (disposed || writing || touching || term.hasSelection() || pending === null) return;
+      const next = pending;
+      pending = null;
+      const update = snapshotUpdate(applied, next);
+      if (update.kind === "unchanged") return;
 
       const buffer = term.buffer.active;
       const atBottom = buffer.viewportY === buffer.baseY;
-      const distanceFromBottom = buffer.baseY - buffer.viewportY;
-      applied = next;
-      pending = null;
-      term.reset();
-      term.write(next, () => {
-        if (atBottom) term.scrollToBottom();
-        else {
-          term.scrollToLine(
-            restoredViewportLine(term.buffer.active.baseY, distanceFromBottom),
-          );
+      const previousLine = buffer.viewportY;
+      const anchor = buffer.getLine(previousLine)?.translateToString(true) ?? "";
+      const revision = gestureRevision;
+      writing = true;
+      if (update.kind === "replace") term.reset();
+      term.write(update.text, () => {
+        if (disposed) return;
+        writing = false;
+        applied = next;
+        if (!touching && revision === gestureRevision) {
+          if (atBottom) term.scrollToBottom();
+          else {
+            const active = term.buffer.active;
+            let line = -1;
+            if (anchor) {
+              for (let i = 0; i < active.length; i++) {
+                if (active.getLine(i)?.translateToString(true) === anchor && (line < 0 || Math.abs(i - previousLine) < Math.abs(line - previousLine))) line = i;
+              }
+            }
+            term.scrollToLine(line >= 0 ? line : 0);
+          }
         }
+        flushSnapshot();
       });
     };
+    const startTouch = () => { touching = true; gestureRevision++; };
+    const endTouch = () => { touching = false; flushSnapshot(); };
+    const onWheel = () => { gestureRevision++; };
+    container.addEventListener("touchstart", startTouch, { passive: true });
+    container.addEventListener("touchend", endTouch, { passive: true });
+    container.addEventListener("touchcancel", endTouch, { passive: true });
+    container.addEventListener("wheel", onWheel, { passive: true });
     applySnapshotRef.current = applySnapshot;
 
     term.onData((data) => {
       callbacksRef.current.onInput(normalizeTerminalInput(data, { composing, paste: pasting }));
     });
     term.onSelectionChange(() => {
-      if (!term.hasSelection() && pending !== null) applySnapshot(pending);
+      if (!term.hasSelection()) flushSnapshot();
     });
     term.onResize(({ cols, rows }) => {
       if (!callbacksRef.current.viewportEnabled) return;
@@ -114,6 +141,11 @@ export function Terminal(props: TerminalProps) {
     resizeObserver.observe(container);
 
     return () => {
+      disposed = true;
+      container.removeEventListener("touchstart", startTouch);
+      container.removeEventListener("touchend", endTouch);
+      container.removeEventListener("touchcancel", endTouch);
+      container.removeEventListener("wheel", onWheel);
       container.removeEventListener("compositionstart", startComposition);
       container.removeEventListener("compositionend", endComposition);
       container.removeEventListener("paste", paste, true);
@@ -154,6 +186,7 @@ export function Terminal(props: TerminalProps) {
         settings={props.settings}
         onKey={sendKey}
         onSubmit={props.onSubmit}
+        onLatest={() => termRef.current?.scrollToBottom()}
       />
     </main>
   );

@@ -10,8 +10,9 @@ interface TerminalToolbarProps {
   settings: ReturnType<typeof useTerminalPreferences>;
   onKey(key: AllowedKey): void;
   onSubmit(text: string): Promise<SubmitResult>;
+  onLatest?(): void;
 }
-export function TerminalToolbar({ connected, settings, onKey, onSubmit }: TerminalToolbarProps) {
+export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest }: TerminalToolbarProps) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,6 +49,7 @@ export function TerminalToolbar({ connected, settings, onKey, onSubmit }: Termin
       </form>
       <nav aria-label="Terminal shortcuts" className="terminal-toolbar">
         <button ref={menuButton} type="button" onClick={() => setMenuOpen(true)}>Shortcuts</button>
+        <button type="button" onClick={onLatest}>Latest</button>
         {settings.preferences.favorites.map((shortcut) => {
           const label = shortcut.kind === "key" ? KEY_SHORTCUTS.find((item) => item.key === shortcut.key)?.label : settings.preferences.commands.find((item) => item.id === shortcut.commandId)?.label;
           return label ? <button type="button" key={shortcutId(shortcut)} disabled={!connected || submitting} aria-label={label} onClick={() => void invoke(shortcut)}>{label}</button> : null;

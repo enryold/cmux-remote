@@ -36,7 +36,7 @@ it("allows configuration offline but prevents invocation", () => {
   render(<Toolbar />);
   fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
   const dialog = screen.getByRole("dialog");
-  expect((within(dialog).getByRole("button", { name: "Shift+←", exact: true }) as HTMLButtonElement).disabled).toBe(true);
+  expect((within(dialog).getByRole("button", { name: "Shift+←" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(screen.getByLabelText("Shortcut name"), { target: { value: "Bad" } });
   fireEvent.change(screen.getByLabelText("Command"), { target: { value: "💡".repeat(1025) } });
   fireEvent.click(screen.getByRole("button", { name: "Save command" }));

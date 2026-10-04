@@ -3,9 +3,16 @@ import {
   cleanTerminalSnapshot,
   controlText,
   restoredViewportLine,
+  snapshotUpdate,
 } from "../terminal";
 
 describe("terminal helpers", () => {
+  it("skips identical snapshots, appends suffixes, and repaints changed prompts", () => {
+    expect(snapshotUpdate(null, "ready")).toEqual({ kind: "replace", text: "ready" });
+    expect(snapshotUpdate("ready", "ready")).toEqual({ kind: "unchanged", text: "" });
+    expect(snapshotUpdate("ready", "ready\nnext")).toEqual({ kind: "append", text: "\nnext" });
+    expect(snapshotUpdate("ready\nprompt", "ready\nchanged")).toEqual({ kind: "replace", text: "ready\nchanged" });
+  });
   it("normalizes padded snapshots without trimming meaningful leading text", () => {
     expect(cleanTerminalSnapshot("  prompt  \nvalue    \n")).toBe(
       "  prompt\nvalue\n",
