@@ -125,6 +125,12 @@ application catalogue uses the canonical strings above; any required upstream al
 inside the server. If Shift+Left is unavailable, this outcome remains incomplete: do not substitute
 an unrelated gesture or claim the menu problem fixed.
 
+Execution verification (2026-10-04): cmux 0.64.25 (106), commit `b685a275c`, accepts the canonical
+spellings directly. A disposable raw-input terminal received `ESC[1;2D` for `shift+left`, `ESC[Z`
+for `shift+tab`, and `ESC[1;2C`, `ESC[1;2A`, `ESC[1;2B` for Shift+Right/Up/Down. No backend aliases
+are required. This verifies key transport; testing the user's agent menus on their iPhone remains
+part of hardware acceptance.
+
 ## Scrolling and font controls
 
 Reproduce the scroll failure using disposable high-output and idle terminals, with the keyboard

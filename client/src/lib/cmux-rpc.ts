@@ -9,6 +9,13 @@ export type AllowedMethod =
 export type AllowedKey =
   | "escape"
   | "tab"
+  | "shift+tab"
+  | "left"
+  | "right"
+  | "shift+left"
+  | "shift+right"
+  | "shift+up"
+  | "shift+down"
   | "ctrl+c"
   | "ctrl+d"
   | "up"

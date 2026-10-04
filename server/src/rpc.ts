@@ -1,6 +1,13 @@
 export type AllowedKey =
   | "escape"
   | "tab"
+  | "shift+tab"
+  | "left"
+  | "right"
+  | "shift+left"
+  | "shift+right"
+  | "shift+up"
+  | "shift+down"
   | "ctrl+c"
   | "ctrl+d"
   | "up"
@@ -79,6 +86,13 @@ const UUID_PATTERN =
 const ALLOWED_KEYS = new Set<AllowedKey>([
   "escape",
   "tab",
+  "shift+tab",
+  "left",
+  "right",
+  "shift+left",
+  "shift+right",
+  "shift+up",
+  "shift+down",
   "ctrl+c",
   "ctrl+d",
   "up",

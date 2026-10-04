@@ -10,6 +10,13 @@ const paneId = "22222222-2222-4222-8222-222222222222";
 const workspaceId = "33333333-3333-4333-8333-333333333333";
 
 describe("parseAllowedRequest", () => {
+  it("delivers the finite modified-key catalogue to the exact terminal", () => {
+    for (const key of ["escape", "tab", "enter", "ctrl+c", "ctrl+d", "up", "down", "left", "right", "shift+tab", "shift+left", "shift+right", "shift+up", "shift+down"]) {
+      const request = parseAllowedRequest(JSON.stringify({id: "keys", method: "surface.send_key", params: {surface_id: surfaceId, key}}));
+      expect(toCmuxCall(request, "client")).toEqual({method: "surface.send_key", params: {surface_id: surfaceId, key}});
+    }
+    expect(() => parseAllowedRequest(JSON.stringify({id: "bad", method: "surface.send_key", params: {surface_id: surfaceId, key: "shift+cmd+q"}}))).toThrow("invalid_params");
+  });
   it("accepts and maps a bounded exact terminal read", () => {
     const request = parseAllowedRequest(
       JSON.stringify({
