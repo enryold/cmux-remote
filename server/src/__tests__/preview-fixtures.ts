@@ -10,6 +10,9 @@ export function browserPreviewFixture() {
     png_base64: PREVIEW_PNG, path: "/private/redacted/capture.png", url: "file:///private/redacted/capture.png",
   };
 }
+export function previewConfig(socketPath = "/tmp/nonexistent-preview.sock") {
+  return { hostname: "127.0.0.1", port: 0, remoteToken: "a".repeat(32), publicOrigin: "https://mac.example", tailscaleCapability: null, pairingCode: null, socketPath, socketPassword: null };
+}
 export const NATIVE_PREVIEW_FAILURE = {
   ok: false, error: { code: "internal_error", message: "v2 worker method 'mobile.panel.artifact.stat' has no worker handler" },
 };

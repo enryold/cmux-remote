@@ -119,9 +119,11 @@ Controlling this app can be equivalent to controlling your Mac shell. The bridge
 - can require a Tailscale app capability granted to one exact device;
 - supports a single-use six-digit pairing code without sending the signing secret to the browser;
 - uses an HttpOnly, SameSite session cookie after login;
-- checks the exact request Origin for login, logout, and WebSocket upgrades;
+- checks the exact request Origin for login, logout, previews, and WebSocket upgrades;
 - accepts only topology, bounded terminal read/input, named-key, and viewport RPCs;
-- never exposes arbitrary cmux RPC, browser control, workspace creation, or shell spawning;
+- accepts one protected preview POST for an exact current browser surface, with fixed server-owned
+  screenshot reads, fresh ownership checks, a 10-second deadline, and one capture in flight;
+- never exposes arbitrary cmux RPC, browser input/navigation, workspace creation, or shell spawning;
 - never caches authentication, API, WebSocket, or terminal responses in the service worker.
 
 Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. Device pairing is a second
@@ -228,7 +230,7 @@ Then run both processes:
 devenv up
 ```
 
-Open `http://localhost:5173`. Vite proxies `/auth`, `/health`, and `/ws` to the bridge.
+Open `http://localhost:5173`. Vite proxies `/auth`, `/health`, `/api`, and `/ws` to the bridge.
 
 Useful checks:
 

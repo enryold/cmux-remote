@@ -10,6 +10,8 @@ import {
 import { CmuxEventStream } from "./cmux-events";
 import { loadConfig, type RuntimeConfig } from "./config";
 import { createHealthRoutes } from "./health";
+import { createPreviewRoutes } from "./preview-routes";
+import { createPreviewService } from "./surface-preview";
 import { createWebSocketData, createWebSocketHandler } from "./ws";
 
 const clientDistPath = join(import.meta.dir, "../../client/dist");
@@ -36,6 +38,8 @@ export function startServer(config: RuntimeConfig): RunningServer {
   });
   app.route("/", createHealthRoutes(config));
   app.route("/", createAuthRoutes(config, pairingChallenge));
+  const previewService = createPreviewService(config);
+  app.route("/", createPreviewRoutes(config, previewService));
   app.use("/*", serveStatic({ root: clientDistPath }));
 
   const eventStream = new CmuxEventStream({
@@ -76,6 +80,7 @@ export function startServer(config: RuntimeConfig): RunningServer {
     port: server.port ?? config.port,
     async stop(closeActiveConnections) {
       eventStream.stop();
+      previewService.close();
       await server.stop(closeActiveConnections);
     },
   };
