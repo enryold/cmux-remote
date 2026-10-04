@@ -103,6 +103,19 @@ describe("parseAllowedRequest", () => {
 });
 
 describe("sanitizeCmuxResult", () => {
+  it("exports only HTTP(S) origins for browser labels, including URL titles", () => {
+    for (const [url, expected] of [
+      ["https://user:password@example.com/private-token?token=secret#fragment", "https://example.com"],
+      ["http://localhost:3000/path", "http://localhost:3000"], ["file:///private/secret.png", null], ["javascript:alert(1)", null],
+      [`https://example.com/${"x".repeat(4096)}`, null],
+    ]) {
+      const tree = { windows: [{ workspaces: [{ id: workspaceId, title: "Test", index: 0, selected: true, panes: [{ id: paneId, index: 0, focused: true, surfaces: [{ id: surfaceId, type: "browser", title: url, url, index: 0, selected: true }] }] }] }] };
+      const result = sanitizeCmuxResult("system.tree", tree) as { workspaces: Array<{ panes: Array<{ surfaces: Array<{ title: string; urlLabel: string | null }> }> }> };
+      expect(result.workspaces[0]?.panes[0]?.surfaces[0]?.urlLabel).toBe(expected);
+      expect(JSON.stringify(result)).not.toContain("secret");
+      expect(JSON.stringify(result)).not.toContain("password");
+    }
+  });
   it("flattens tree windows and strips refs, tty, URL, and unknown fields", () => {
     const result = sanitizeCmuxResult("system.tree", {
       active: null,
@@ -163,6 +176,7 @@ describe("sanitizeCmuxResult", () => {
                   title: "API Agent",
                   index: 0,
                   selected: true,
+                  urlLabel: null,
                 },
               ],
             },

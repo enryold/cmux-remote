@@ -315,6 +315,15 @@ button {
 }
 .shortcut-heading { display: flex; justify-content: space-between; align-items: center; }
 .font-controls { display: flex; align-items: center; gap: 14px; }
+
+.preview-page { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.preview-controls { display: flex; align-items: center; gap: 10px; padding: 8px; }
+.preview-controls button { min-width: 44px; min-height: 44px; border: 1px solid #414958; border-radius: 7px; background: #252b36; }
+.preview-controls button:disabled { opacity: 0.5; }
+.preview-page > p { margin: 4px 10px; font-size: 13px; color: #aab1be; }
+.preview-content { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; }
+.preview-content img { display: block; max-width: none; max-height: none; }
+.preview-content pre { padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .shortcut-sheet h2 { margin: 0; }
 .shortcut-sheet p { color: #aab1be; font-size: 13px; }
 .shortcut-sheet button, .shortcut-sheet input {

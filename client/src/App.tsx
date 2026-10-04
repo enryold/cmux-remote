@@ -4,6 +4,8 @@ import { Header } from "./components/Header";
 import { Login } from "./components/Login";
 import { StatusBar } from "./components/StatusBar";
 import { Terminal } from "./components/Terminal";
+import { SurfacePreview } from "./components/SurfacePreview";
+import { useSurfacePreview } from "./hooks/useSurfacePreview";
 import { useAuth } from "./hooks/useAuth";
 import { useCmux } from "./hooks/useCmux";
 import { useTerminalPolling } from "./hooks/useTerminalPolling";
@@ -11,8 +13,7 @@ import { useTerminalPreferences } from "./hooks/useTerminalPreferences";
 import type { ConnectionStatus } from "./lib/cmux-rpc";
 import { createTerminalInputDispatcher, submissionError, type TerminalInput } from "./lib/terminal-input";
 import {
-  recoverSelectedSurface,
-  terminalWorkspaces,
+  previewSurfaceWorkspaces,
 } from "./lib/topology";
 
 export function App() {
@@ -60,17 +61,20 @@ function CommandCenter({
   const apiRef = useRef(cmux);
   apiRef.current = cmux;
   const inputErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const workspaces = useMemo(() => terminalWorkspaces(cmux.tree), [cmux.tree]);
+  const workspaces = useMemo(() => previewSurfaceWorkspaces(cmux.tree), [cmux.tree]);
   const selected = workspaces
-    .flatMap((workspace) => workspace.terminals)
+    .flatMap((workspace) => workspace.surfaces)
     .find((surface) => surface.id === selectedId);
+  const selectedTypeRef = useRef(selected?.type);
+  selectedTypeRef.current = selected?.type;
   const terminalConnected =
     cmux.bridgeStatus === "connected" && cmux.cmuxStatus === "connected";
   const polling = useTerminalPolling({
-    enabled: terminalConnected && selected !== undefined,
-    surfaceId: selectedId,
+    enabled: terminalConnected && selected?.type === "terminal",
+    surfaceId: selected?.type === "terminal" ? selectedId : null,
     readText: cmux.readText,
   });
+  const preview = useSurfacePreview({ surfaceId: selected?.type !== "terminal" ? selectedId : null, enabled: terminalConnected && selected !== undefined && selected.type !== "terminal", onUnauthorized: expire, generation: cmux.connectionGeneration });
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
@@ -85,14 +89,14 @@ function CommandCenter({
   useEffect(() => {
     if (
       selectedId !== null &&
-      recoverSelectedSurface(cmux.tree, selectedId) === null
+      selected === undefined
     ) {
       selectSurface(null);
-      setNotice("Terminal closed");
+      setNotice("Surface closed");
       if (history.state?.surfaceId) history.back();
       else history.replaceState(null, "", location.pathname);
     }
-  }, [cmux.tree, selectedId, selectSurface]);
+  }, [selected, selectedId, selectSurface]);
 
   useEffect(
     () => () => {
@@ -115,7 +119,7 @@ function CommandCenter({
     return createTerminalInputDispatcher({
       sendText: cmux.sendText, sendKey: cmux.sendKey,
       isCurrent: (id, capturedGeneration) => id === selectedId && capturedGeneration === generation && selectionRef.current.id === id
-        && selectionRef.current.revision === revision && apiRef.current.isConnectionCurrent(capturedGeneration),
+        && selectionRef.current.revision === revision && selectedTypeRef.current === "terminal" && apiRef.current.isConnectionCurrent(capturedGeneration),
     });
   }, [selectedId, generation, cmux.sendText, cmux.sendKey]);
   const sendInput = async (input: TerminalInput) => {
@@ -152,7 +156,7 @@ function CommandCenter({
       {selectedId && selected ? (
         <>
           <Header title={selected.title} onBack={() => history.back()} />
-          <Terminal
+          {selected.type === "terminal" ? <Terminal
             key={selectedId}
             content={polling.content}
             connected={terminalConnected}
@@ -171,7 +175,7 @@ function CommandCenter({
             stale={polling.error !== null}
             surfaceId={selectedId}
             viewportEnabled={cmux.capabilities.includes("terminal.viewport.v1")}
-          />
+          /> : <SurfacePreview key={selectedId} {...preview} />}
         </>
       ) : (
         <>

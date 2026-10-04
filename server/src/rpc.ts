@@ -69,6 +69,7 @@ export interface TreeSnapshot {
         title: string;
         index: number;
         selected: boolean;
+        urlLabel: string | null;
       }>;
     }>;
   }>;
@@ -344,10 +345,14 @@ function sanitizeTree(value: unknown): TreeSnapshot {
             focused: cmuxBoolean(pane.focused),
             surfaces: cmuxArray(pane.surfaces).map((surfaceValue) => {
               const surface = cmuxRecord(surfaceValue);
+              const type = cmuxString(surface.type);
+              const title = cmuxString(surface.title);
+              const urlLabel = type === "browser" ? browserOrigin(surface.url) : null;
               return {
                 id: uuid(surface.id, "invalid_cmux_response"),
-                type: cmuxString(surface.type),
-                title: cmuxString(surface.title),
+                type,
+                title: type === "browser" && /^(?:https?:|file:|javascript:|data:)/i.test(title) ? urlLabel ?? "Browser" : title,
+                urlLabel,
                 index: cmuxInteger(surface.index),
                 selected: cmuxBoolean(surface.selected),
               };
@@ -358,6 +363,12 @@ function sanitizeTree(value: unknown): TreeSnapshot {
     });
   });
   return { workspaces };
+}
+
+function browserOrigin(value: unknown): string | null {
+  if (typeof value !== "string" || encoder.encode(value).length > 4096 || !/^https?:\/\//i.test(value)) return null;
+  try { const url = new URL(value); return url.protocol === "http:" || url.protocol === "https:" ? url.origin : null; }
+  catch { return null; }
 }
 
 function trailingUtf8Bytes(value: string, maximum: number): string {

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-04
 
-**Status:** user-confirmed scope; written design prepared for review, not implemented.
+**Status:** approved for execution on 2026-10-04; implemented on the feature branch, pending merge and hardware iPhone acceptance.
 
 ## Intent and acceptance
 

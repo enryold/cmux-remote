@@ -28,5 +28,5 @@ export async function login(page: Page): Promise<void> {
     },
   ]);
   await page.goto("/");
-  await page.getByRole("heading", { name: "Terminals" }).waitFor();
+  await page.getByRole("heading", { name: "Surfaces" }).waitFor();
 }

@@ -26,6 +26,7 @@ test("never stores auth or terminal data in Cache Storage", async ({ page }) => 
     await navigator.serviceWorker.ready;
     await fetch("/manifest.json");
     await fetch("/auth/status");
+    await fetch("/api/surfaces/dddddddd-dddd-4ddd-8ddd-dddddddddddd/preview", { method: "POST" });
   });
 
   const cached = await page.evaluate(async () => {
@@ -38,6 +39,7 @@ test("never stores auth or terminal data in Cache Storage", async ({ page }) => 
   });
   expect(cached).toContain("/manifest.json");
   expect(cached.some((item) => item.startsWith("/auth/"))).toBe(false);
+  expect(cached.some((item) => item.startsWith("/api/"))).toBe(false);
   expect(cached).not.toContain("/ws");
   expect(cached).not.toContain("/health");
 });

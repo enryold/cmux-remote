@@ -1,5 +1,18 @@
 import type { TreeSnapshot } from "./cmux-rpc";
 
+export interface SurfaceWorkspace {
+  id: string;
+  title: string;
+  surfaces: Array<{ id: string; title: string; selected: boolean; type: string; urlLabel: string | null }>;
+}
+export function previewSurfaceWorkspaces(tree: TreeSnapshot): SurfaceWorkspace[] {
+  return [...tree.workspaces].sort((a, b) => a.index - b.index).map((workspace) => ({
+    id: workspace.id, title: workspace.title,
+    surfaces: [...workspace.panes].sort((a, b) => a.index - b.index).flatMap((pane) => [...pane.surfaces]
+      .sort((a, b) => a.index - b.index).map(({ id, title, selected, type, urlLabel }) => ({ id, title, selected, type, urlLabel }))),
+  }));
+}
+
 export interface TerminalWorkspace {
   id: string;
   title: string;

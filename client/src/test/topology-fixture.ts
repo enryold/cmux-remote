@@ -19,6 +19,7 @@ export const snapshotWithTwoWorkspaces: TreeSnapshot = {
             {
               id: terminalB,
               type: "terminal",
+              urlLabel: null,
               title: "UI Agent",
               index: 2,
               selected: false,
@@ -26,6 +27,7 @@ export const snapshotWithTwoWorkspaces: TreeSnapshot = {
             {
               id: terminalA,
               type: "terminal",
+              urlLabel: null,
               title: "API Agent",
               index: 0,
               selected: true,
@@ -33,6 +35,7 @@ export const snapshotWithTwoWorkspaces: TreeSnapshot = {
             {
               id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
               type: "browser",
+              urlLabel: "http://localhost:3000",
               title: "localhost",
               index: 1,
               selected: false,

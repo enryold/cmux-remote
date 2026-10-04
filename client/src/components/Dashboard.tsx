@@ -1,8 +1,8 @@
 import type { ConnectionStatus } from "../lib/cmux-rpc";
-import type { TerminalWorkspace } from "../lib/topology";
+import type { SurfaceWorkspace } from "../lib/topology";
 
 interface DashboardProps {
-  workspaces: TerminalWorkspace[];
+  workspaces: SurfaceWorkspace[];
   connection: ConnectionStatus;
   onOpen(surfaceId: string): void;
 }
@@ -15,7 +15,7 @@ export function Dashboard({
   return (
     <main className="dashboard">
       <div className="dashboard-heading">
-        <h1>Terminals</h1>
+        <h1>Surfaces</h1>
         <span className={`connection-label connection-${connection}`}>
           {connection}
         </span>
@@ -23,11 +23,11 @@ export function Dashboard({
       {workspaces.map((workspace) => (
         <section className="workspace-group" key={workspace.id}>
           <h2>{workspace.title}</h2>
-          {workspace.terminals.length === 0 ? (
-            <p className="empty-row">No terminal surfaces</p>
+          {workspace.surfaces.length === 0 ? (
+            <p className="empty-row">No surfaces</p>
           ) : (
             <div className="terminal-list">
-              {workspace.terminals.map((terminal) => (
+              {workspace.surfaces.map((terminal) => (
                 <button
                   aria-label={terminal.title}
                   className="terminal-row"
@@ -41,7 +41,7 @@ export function Dashboard({
                   />
                   <span className="terminal-row-text">
                     <strong>{terminal.title}</strong>
-                    <small>Terminal</small>
+                    <small>{terminal.type === "terminal" ? "Terminal" : terminal.type === "browser" ? `Browser${terminal.urlLabel ? ` · ${terminal.urlLabel}` : ""}` : terminal.type === "markdown" ? "Markdown · preview unavailable" : terminal.type === "filepreview" ? "Image · preview unavailable" : "Unsupported panel"}</small>
                   </span>
                 </button>
               ))}

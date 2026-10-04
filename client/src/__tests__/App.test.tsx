@@ -77,7 +77,7 @@ it("opens an exact surface and returns to the dashboard on popstate", () => {
     history.replaceState(null, "", "/");
     window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
   });
-  expect(screen.getByRole("heading", { name: "Terminals" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Surfaces" })).toBeTruthy();
 });
 
 it("returns to the dashboard when cmux closes the selected surface", async () => {
@@ -91,9 +91,9 @@ it("returns to the dashboard when cmux closes the selected surface", async () =>
   rerender(<App />);
 
   await waitFor(() =>
-    expect(screen.getByText("Terminal closed")).toBeTruthy(),
+    expect(screen.getByText("Surface closed")).toBeTruthy(),
   );
-  expect(screen.getByRole("heading", { name: "Terminals" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Surfaces" })).toBeTruthy();
 });
 
 it("submits prompt text before the terminal Enter key", async () => {
@@ -143,6 +143,26 @@ it("cancels late Enter when leaving the original terminal", async () => {
   await waitFor(() => expect(api.sendText).toHaveBeenCalledOnce());
   act(() => window.dispatchEvent(new PopStateEvent("popstate", { state: null })));
   fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+  acknowledge();
+  await expect(result).resolves.toBe("enter_unconfirmed");
+  expect(api.sendKey).not.toHaveBeenCalled();
+});
+
+it("cancels late Enter when the selected UUID no longer identifies a terminal", async () => {
+  const api = cmuxApi();
+  let acknowledge!: () => void;
+  vi.mocked(api.sendText).mockImplementation(() => new Promise<void>((resolve) => { acknowledge = resolve; }));
+  mocks.useCmux.mockReturnValue(api);
+  const { rerender } = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+  const terminal = mocks.terminal.mock.lastCall?.[0] as { onSubmit(text: string): Promise<string> };
+  const result = terminal.onSubmit("launch");
+  await waitFor(() => expect(api.sendText).toHaveBeenCalledOnce());
+  api.tree = structuredClone(snapshotWithTwoWorkspaces);
+  const target = api.tree.workspaces.flatMap((workspace) => workspace.panes).flatMap((pane) => pane.surfaces).find((surface) => surface.id === terminalA);
+  if (!target) throw new Error("Missing fixture surface");
+  target.type = "filepreview";
+  rerender(<App />);
   acknowledge();
   await expect(result).resolves.toBe("enter_unconfirmed");
   expect(api.sendKey).not.toHaveBeenCalled();

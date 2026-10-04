@@ -24,6 +24,10 @@ Rows are historical and are never deleted when work ships or is removed.
 | Milestone 3 — Agent dashboard | Enrich live surfaces with activity, previews, notifications, and conservative Codex/Claude lifecycle state. Reassigned from Milestone 2 on 2026-10-04. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
 | Browser awareness — original Milestone 3 scope | Historical metadata-only direction; the user-confirmed Milestone 2 preview direction now includes browser discovery. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
 
+| Milestone 2 — Mobile terminal usability | Configurable keys and saved commands, toolbar favorites, reliable Enter/scrolling, and local font size. | [Spec](specs/2026-10-04-mobile-terminal-usability-design.md) | 2026-10-04 | — | — | — |
+| Milestone 2 — Browser screenshots | Read-only exact-panel captures with Refresh and local zoom/pan. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
+| Milestone 2 — Native Markdown/image previews | Read-only content from already-open native panels; blocked by the installed cmux content-read contract. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
+
 ## Version reassignment — 2026-10-04
 
 All previously planned Milestone 2 agent-dashboard features move to Milestone 3: activity time,
@@ -41,8 +45,9 @@ included. Browser discovery moves into this direction; the original metadata-onl
 historical. Native Markdown/image reads currently have a verified installed-socket blocker and must
 not be marked developed or live based on capability advertisement alone.
 
-The written artifacts below are prepared for review. Add their lifecycle rows when the written
-specifications are approved; no new Developed or Live event has occurred:
+Execution was approved on 2026-10-04. Terminal usability and browser screenshots are implemented
+on `feat/v2-mobile-controls`; native content reads remain blocked. No new Developed or Live event
+has occurred: merge and target Mac/iPhone acceptance are still required. Governing artifacts:
 
 - Terminal usability: [design](specs/2026-10-04-mobile-terminal-usability-design.md) and
   [implementation plan](plans/2026-10-04-mobile-terminal-usability.md).

@@ -41,11 +41,15 @@ export function sanitizeBrowserPreview(raw: unknown, target: { workspaceId: stri
   if (width < 1 || height < 1) fail("preview_failed");
   if (width > 4096 || height > 4096 || width * height > 8388608) fail("preview_too_large");
   if (bytes[26] !== 0 || bytes[27] !== 0 || (bytes[28] !== 0 && bytes[28] !== 1)) fail("preview_failed");
-  let offset = 33; let data = false; let ended = false;
+  const bitDepths: Record<number, number[]> = { 0: [1, 2, 4, 8, 16], 2: [8, 16], 3: [1, 2, 4, 8], 4: [8, 16], 6: [8, 16] };
+  if (!bitDepths[bytes[25] ?? -1]?.includes(bytes[24] ?? -1)) fail("preview_failed");
+  let offset = 8; let data = false; let ended = false;
   while (offset + 12 <= bytes.length) {
     const length = bytes.readUInt32BE(offset);
     const type = bytes.toString("ascii", offset + 4, offset + 8);
     if (offset + 12 + length > bytes.length) fail("preview_failed");
+    if (Bun.hash.crc32(bytes.subarray(offset + 4, offset + 8 + length)) !== bytes.readUInt32BE(offset + 8 + length)) fail("preview_failed");
+    if (type === "IHDR" && offset !== 8) fail("preview_failed");
     if (type === "IDAT") data = true;
     offset += length + 12;
     if (type === "IEND") { if (length !== 0) fail("preview_failed"); ended = true; break; }

@@ -118,6 +118,7 @@ function treeResult(value: unknown): TreeSnapshot {
                 typeof surface.title !== "string" ||
                 typeof surface.index !== "number" ||
                 typeof surface.selected !== "boolean"
+                || (surface.urlLabel !== null && (typeof surface.urlLabel !== "string" || new TextEncoder().encode(surface.urlLabel).length > 4096))
               ) {
                 return invalidResult();
               }
@@ -127,6 +128,7 @@ function treeResult(value: unknown): TreeSnapshot {
                 title: surface.title,
                 index: surface.index,
                 selected: surface.selected,
+                urlLabel: surface.urlLabel as string | null,
               };
             }),
           };

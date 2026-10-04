@@ -34,6 +34,7 @@ const tree: TreeSnapshot = {
             {
               id: surfaceId,
               type: "terminal",
+              urlLabel: null,
               title: "API Agent",
               index: 0,
               selected: true,

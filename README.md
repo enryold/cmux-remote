@@ -90,21 +90,24 @@ unload the agent and remove its plist from `~/Library/LaunchAgents`.
 
 ## Current status
 
-The current Milestone 1 build provides:
+This branch adds Milestone 2 terminal usability and browser previews to the reliable terminal build:
 
-- dynamic workspace, pane, and terminal-surface discovery without fixed names or counts;
+- dynamic workspace, pane, and typed-surface discovery without fixed names or counts;
 - a dense mobile dashboard with exact-surface navigation and browser back support;
 - xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
 - direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
-- a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab) and saved commands;
+- a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab), saved commands,
+  toolbar favorites, and locally persisted terminal font size;
+- read-only browser screenshots with manual Refresh and local zoom/pan;
 - adaptive output polling, topology event subscriptions, foreground refresh, and automatic reconnect;
 - coordinated terminal viewport sizing that is cleared when the remote terminal closes;
 - an installable dark-mode PWA with iPhone safe-area and software-keyboard handling;
 - localhost-only serving, exact-origin checks, a constrained RPC whitelist, and optional one-device
   Tailscale pairing.
 
-The flow has been exercised from iPhone Safari over Tailscale for pairing, terminal switching,
-output, prompt submission, special keys, keyboard layout, and viewport cleanup. The deterministic
+The Milestone 1 flow was exercised from iPhone Safari over Tailscale for pairing, terminal switching,
+output, prompt submission, special keys, keyboard layout, and viewport cleanup. The new Milestone 2
+flows have automated Chromium and iPhone WebKit coverage; their hardware iPhone acceptance is pending. The deterministic
 gate runs client and server tests plus Chromium and iPhone WebKit E2E tests against a fake cmux
 socket. Repeat the real-device checklist below before tagging a release.
 
@@ -249,7 +252,7 @@ Chromium plus iPhone WebKit E2E tests against a fake cmux socket.
 
 ## Runtime behavior
 
-The client loads the complete cmux workspace → pane → surface tree and lists every terminal surface.
+The client loads the complete cmux workspace → pane → surface tree and lists typed surfaces.
 Lifecycle events trigger live rediscovery, with a slow visible-page refresh as fallback. Only the
 open terminal is read; polling adapts from 250 ms during activity to 5 seconds while idle and stops
 while the PWA is hidden.
@@ -258,8 +261,7 @@ Input is sent to an exact surface UUID and is never replayed after disconnect. O
 add, edit, or delete up to 20 single-line commands and choose up to 12 favorites for the toolbar.
 Preferences stay on this device. Saved commands send text followed by a real Enter to the open
 terminal. Ctrl-C interrupts a process; Ctrl-D ends input and may close a shell. Both are optional
-catalogue entries. Physical Ctrl input remains available. Browser surfaces are discovered
-by cmux but intentionally not exposed for control in Milestone 1.
+catalogue entries. Physical Ctrl input remains available.
 
 Terminal snapshots are coalesced while a write, touch gesture, or selection is active. Appended
 output keeps the same xterm buffer; changed prompts retain the visible history where it remains
@@ -267,13 +269,33 @@ available. **Latest** returns to the bottom without sending input to cmux.
 The **A− / A+** controls in Shortcuts set the terminal font from 10 to 24 px and persist on this
 device. The terminal refits without being recreated or changing the Mac's global font settings.
 
+Browser rows open a read-only capture of that exact panel without changing focus on the Mac.
+Only the HTTP(S) origin is shown as a URL label; credentials, path, query, and fragment are removed.
+Capture happens on opening, **Refresh**, or returning to the foreground, with no periodic screenshots.
+Zoom (25%–300%) and pan are local. A failed refresh marks the previous capture stale; disconnect,
+auth expiry, panel removal, or leaving the view clears its bytes. Previews are held only in memory.
+The bridge validates PNG bytes up to 2 MiB, axes up to 4,096 px, and area up to 8,388,608 px, within
+a 3 MiB JSON response budget. Oversized captures fail without changing the socket frame limit.
+
+Native Markdown/image rows currently show **Preview unavailable**. On cmux 0.64.25 (106), the
+advertised `panel.artifact.v1` capability has no callable `mobile.panel.artifact.stat` worker handler,
+and the tree provides no authorized content descriptor. Local-file viewing therefore remains
+blocked; the bridge does not infer file paths or read arbitrary files. Browser screenshots work
+independently of this missing native provider.
+
 ## Real-device release checklist
 
 Before marking a release live, use eight disposable terminal surfaces and verify:
 
 - complete discovery and terminal switching;
 - rapid bounded output and idle output;
-- typing, paste, Enter, Ctrl-C, selection, copy, and scroll preservation;
+- typing, paste, physical/iPhone/composer Enter, selection, copy, and scroll preservation;
+- Shortcuts CRUD, favorites, optional Ctrl-C/Ctrl-D, and disposable Codex/Claude question menus
+  using Shift+Left, Shift+Tab, arrows, Escape, and empty Enter;
+- saved launcher commands run once and never replay on reload/reconnect;
+- 10–24 px font persistence and history position during output, touch, selection, and font changes;
+- read-only browser capture, Refresh, local zoom/pan, stale failures, closure, and auth expiry;
+- native Markdown/image rows truthfully report unavailable until the provider gate passes;
 - selected-surface closure returns to the dashboard;
 - iPhone lock/background for ten minutes and foreground recovery;
 - Tailscale disconnect/reconnect without a manual reload;
@@ -286,10 +308,10 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Implementation plan](docs/superpowers/plans/2026-09-13-reliable-mobile-terminal.md)
 - [Guided first-run setup specification](docs/superpowers/specs/2026-09-14-guided-first-run-setup-design.md)
 - [Guided first-run setup plan](docs/superpowers/plans/2026-09-14-guided-first-run-setup.md)
-- [Planned Milestone 2 terminal usability design](docs/superpowers/specs/2026-10-04-mobile-terminal-usability-design.md)
-- [Planned Milestone 2 terminal usability plan](docs/superpowers/plans/2026-10-04-mobile-terminal-usability.md)
-- [Planned read-only content preview design and compatibility gate](docs/superpowers/specs/2026-10-04-surface-content-previews-design.md)
-- [Planned read-only content preview implementation](docs/superpowers/plans/2026-10-04-surface-content-previews.md)
+- [Milestone 2 terminal usability design](docs/superpowers/specs/2026-10-04-mobile-terminal-usability-design.md)
+- [Milestone 2 terminal usability plan](docs/superpowers/plans/2026-10-04-mobile-terminal-usability.md)
+- [Read-only content preview design and compatibility gate](docs/superpowers/specs/2026-10-04-surface-content-previews-design.md)
+- [Read-only content preview implementation](docs/superpowers/plans/2026-10-04-surface-content-previews.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
 - [Engineering guide for Codex and other coding agents](AGENTS.md)
 - [Claude Code entry point](CLAUDE.md)

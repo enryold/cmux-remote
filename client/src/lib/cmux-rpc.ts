@@ -53,6 +53,7 @@ export interface TreeSnapshot {
         title: string;
         index: number;
         selected: boolean;
+        urlLabel: string | null;
       }>;
     }>;
   }>;

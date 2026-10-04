@@ -4,9 +4,15 @@ import {
   terminalA,
   terminalB,
 } from "../../test/topology-fixture";
-import { recoverSelectedSurface, terminalWorkspaces } from "../topology";
+import { previewSurfaceWorkspaces, recoverSelectedSurface, terminalWorkspaces } from "../topology";
 
 describe("terminal topology", () => {
+  it("discovers typed browser and native panels in pane order", () => {
+    const tree = structuredClone(snapshotWithTwoWorkspaces);
+    const pane = tree.workspaces[0]?.panes[0]; if (!pane) throw new Error("missing pane");
+    pane.surfaces.push({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", title: "Plan.md", type: "markdown", selected: false, index: 3, urlLabel: null });
+    expect(previewSurfaceWorkspaces(tree)[1]?.surfaces.map((item) => item.type)).toEqual(["terminal", "browser", "terminal", "markdown"]);
+  });
   it("sorts arbitrary workspaces and every terminal while ignoring browsers", () => {
     expect(terminalWorkspaces(snapshotWithTwoWorkspaces)).toEqual([
       {

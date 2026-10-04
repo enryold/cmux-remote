@@ -26,6 +26,11 @@ describe("preview validation", () => {
       expect(() => sanitizeBrowserPreview({ ...valid, png_base64: png.toString("base64") }, target, capturedAt)).toThrow("preview_too_large");
     }
   });
+  it("rejects a PNG whose pixel chunk was corrupted", () => {
+    const raw = browserPreviewFixture();
+    const bytes = Buffer.from(raw.png_base64, "base64"); bytes[45] = (bytes[45] ?? 0) ^ 1;
+    expect(() => sanitizeBrowserPreview({ ...raw, png_base64: bytes.toString("base64") }, target, capturedAt)).toThrow("preview_failed");
+  });
 });
 describe("preview capture", () => {
   it("authenticates, targets explicit IDs and rechecks ownership after capture", async () => {

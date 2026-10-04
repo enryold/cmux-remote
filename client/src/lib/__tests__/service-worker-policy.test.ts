@@ -14,6 +14,7 @@ it("caches only same-origin static GET requests", () => {
   ).toBe(false);
   expect(isCacheableRequest(new Request(`${origin}/health`), origin)).toBe(false);
   expect(isCacheableRequest(new Request(`${origin}/ws`), origin)).toBe(false);
+  expect(isCacheableRequest(new Request(`${origin}/api/surfaces/id/preview`, { method: "POST" }), origin)).toBe(false);
   expect(
     isCacheableRequest(new Request(`${origin}/`, { method: "POST" }), origin),
   ).toBe(false);

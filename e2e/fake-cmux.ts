@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PREVIEW_IMAGE } from "./preview-image";
 
 interface RequestFrame {
   id: string;
@@ -11,6 +12,8 @@ interface RequestFrame {
 
 export interface FakeCmuxControl {
   socketPath: string;
+  calls: Array<{ method: string; surfaceId: unknown; workspaceId: unknown }>;
+  configurePreview(action: "reset" | "fail" | "close"): void;
   close(): Promise<void>;
 }
 
@@ -42,6 +45,10 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   ]);
   let newSurfaceVisible = false;
   let eventTimer: ReturnType<typeof setTimeout> | null = null;
+  const calls: FakeCmuxControl["calls"] = [];
+  let browserVisible = true;
+  let browserFailure = false;
+  let eventSequence = 0;
   const questions = new Map<string, number>();
 
   const tree = () => ({
@@ -88,13 +95,17 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
                     index: 3,
                     selected: false,
                   },
-                  {
+                  ...(browserVisible ? [{
                     id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
                     type: "browser",
-                    title: "localhost:3000",
+                    title: "Browser preview",
+                    url: "https://user:password@preview.example/private?token=secret#fragment",
                     index: 4,
                     selected: false,
-                  },
+                  }] : []),
+                  { id: "13131313-1313-4313-8313-131313131313", type: "markdown", title: "Plan.md", index: 6, selected: false },
+                  { id: "14141414-1414-4414-8414-141414141414", type: "filepreview", title: "Image.png", index: 7, selected: false },
+                  { id: "15151515-1515-4515-8515-151515151515", type: "custom", title: "Other panel", index: 8, selected: false },
                   ...(newSurfaceVisible
                     ? [
                         {
@@ -169,6 +180,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   };
 
   const handle = (request: RequestFrame, socket: Socket) => {
+    calls.push({ method: request.method, surfaceId: request.params.surface_id, workspaceId: request.params.workspace_id });
     if (request.method === "auth.login") {
       if (request.params.password === "e2e-cmux-password") {
         reply(socket, request.id, { authenticated: true });
@@ -190,6 +202,12 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
     }
     if (request.method === "system.tree") {
       reply(socket, request.id, tree());
+      return;
+    }
+    if (request.method === "browser.screenshot") {
+      if (!browserVisible || request.params.surface_id !== "dddddddd-dddd-4ddd-8ddd-dddddddddddd" || request.params.workspace_id !== "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa") fail(socket, request.id, "surface_not_found");
+      else if (browserFailure) fail(socket, request.id, "internal_error");
+      else reply(socket, request.id, { workspace_id: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", workspace_ref: "workspace:1", surface_id: "DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD", surface_ref: "surface:2", png_base64: PREVIEW_IMAGE, path: "/private/redacted/preview.png", url: "file:///private/redacted/preview.png" });
       return;
     }
     if (request.method === "surface.read_text") {
@@ -259,7 +277,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
           for (const eventSocket of eventSockets) {
             send(eventSocket, {
               type: "event",
-              seq: 1,
+              seq: ++eventSequence,
               name: "surface.created",
             });
           }
@@ -302,6 +320,16 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
 
   return {
     socketPath,
+    calls,
+    configurePreview(action) {
+      if (action === "reset") { browserVisible = true; browserFailure = false; calls.length = 0; }
+      else if (action === "fail") browserFailure = true;
+      else {
+        browserVisible = false;
+        const seq = ++eventSequence;
+        for (const socket of eventSockets) send(socket, { type: "event", seq, name: "surface.closed" });
+      }
+    },
     async close() {
       if (eventTimer !== null) clearTimeout(eventTimer);
       for (const socket of connections) socket.destroy();

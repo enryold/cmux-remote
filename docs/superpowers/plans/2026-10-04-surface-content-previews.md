@@ -1,6 +1,6 @@
 # Surface Content Previews Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** View content already open in cmux through read-only iPhone previews, delivering browser
 screenshots independently of the blocked native Markdown/image provider.
@@ -14,8 +14,7 @@ devenv; no rendering or streaming dependency for the simple browser viewer.
 
 **Spec:** [Surface content previews](../specs/2026-10-04-surface-content-previews-design.md)
 
-**Status:** ready for written review; native panel delivery is blocked by the verified installed
-socket contract. No implementation has started.
+**Status:** execution authorized on 2026-10-04; browser Tasks 1–3 implemented on the feature branch. Task 4 remains blocked by the verified installed socket contract. Final review/acceptance are recorded below.
 
 ## Global Constraints
 
@@ -65,19 +64,19 @@ socket contract. No implementation has started.
 response (`png_base64`, IDs, extra private fields), and native-handler failure. They are inert data,
 not fake evidence of support. Native provider work is gated separately below.
 
-- [ ] Read the spec and fresh installed version/capabilities; redact local paths and private identity
+- [x] Read the spec and fresh installed version/capabilities; redact local paths and private identity
   from any durable evidence.
-- [ ] Capture a browser screenshot only from a disposable surface containing deterministic public
+- [x] Capture a browser screenshot only from a disposable surface containing deterministic public
   test content. Verify screenshot IDs, PNG encoding, dimensions, bounds, and timeout behavior.
   Preserve any viewport override cleanup; no screenshot of existing private browser content.
-- [ ] Recheck native panel support with nonexistent UUIDs first. The planning-time result was
+- [x] Recheck native panel support with nonexistent UUIDs first. The planning-time result was
   `internal_error: v2 worker method 'mobile.panel.artifact.stat' has no worker handler`.
   Do not treat `panel.artifact.v1` as proof the operation is callable through this socket.
-- [ ] Save complete synthetic/redacted browser response fixtures and the negative native response.
+- [x] Save complete synthetic/redacted browser response fixtures and the negative native response.
   Record that current `system.tree` gives no native-panel content path/descriptor.
-- [ ] If native support remains unavailable, keep Task 4 blocked and proceed with browser Tasks 2–3.
+- [x] If native support remains unavailable, keep Task 4 blocked and proceed with browser Tasks 2–3.
   Do not add a filesystem fallback, mobile cloud transport, inferred path, or cmux fork in this task.
-- [ ] Review fixture representativeness and the spec's evidence; commit the compatibility record.
+- [x] Review fixture representativeness and the spec's evidence; commit the compatibility record.
 
 ## Task 2: Add a protected bounded browser screenshot endpoint
 
@@ -91,12 +90,12 @@ modify `server/src/index.ts`, relevant server integration tests, and `client/vit
 `createPreviewService(config: RuntimeConfig): {capture(surfaceId: string): Promise<SurfacePreview>; close(): void}`;
 `createPreviewRoutes(config: RuntimeConfig, service: ReturnType<typeof createPreviewService>): Hono`.
 
-- [ ] Write tests that missing session, wrong Origin, missing/wrong capability, invalid UUID,
+- [x] Write tests that missing session, wrong Origin, missing/wrong capability, invalid UUID,
   nonempty body, extra client fields, and path/RPC inputs are rejected before a cmux capture.
-- [ ] Add tests resolving a fresh live browser target and checking response IDs and post-capture
+- [x] Add tests resolving a fresh live browser target and checking response IDs and post-capture
   ownership. Assert unknown/terminal/native types produce `preview_unsupported`, missing/moved
   targets produce `surface_unavailable`, and there is no implicit focused-surface fallback.
-- [ ] Pin byte validation and all limits with assertions such as:
+- [x] Pin byte validation and all limits with assertions such as:
 
   ```ts
   expect(() => sanitizeBrowserPreview(oversizedPngResponse, target, capturedAt))
@@ -108,17 +107,17 @@ modify `server/src/index.ts`, relevant server integration tests, and `client/vit
   Cover invalid base64/signature/IHDR, mismatched IDs, 2 MiB decoded bytes, 4,096-pixel axes,
   8,388,608-pixel area, 3 MiB JSON, and upstream path-bearing errors. Valid data URLs never use
   upstream `path` or `url` fields.
-- [ ] Add concurrency/deadline tests: second capture is busy, one capture expires at 10 seconds,
+- [x] Add concurrency/deadline tests: second capture is busy, one capture expires at 10 seconds,
   errors release resources, and unrelated terminal WebSocket operations continue. Include disconnect
   and service shutdown. Require no unbounded overlap or request queue after timeout.
-- [ ] Run `devenv shell -- bun --cwd server test src/__tests__/surface-preview.test.ts src/__tests__/preview-routes.test.ts`;
+- [x] Run `devenv shell -- bun --cwd server test src/__tests__/surface-preview.test.ts src/__tests__/preview-routes.test.ts`;
   confirm new route/service tests fail before implementation.
-- [ ] Implement the dedicated shared preview service over the existing CmuxClient, fresh-tree target
+- [x] Implement the dedicated shared preview service over the existing CmuxClient, fresh-tree target
   checks, fixed `browser.screenshot` call, response sanitizer, and error normalization. Reject native
   types until Task 4's gate passes. Reuse `isAuthorized` / `isAllowedOrigin` rather than inventing auth.
-- [ ] Register the route before static serving, close its client during server shutdown, and proxy
+- [x] Register the route before static serving, close its client during server shutdown, and proxy
   `/api` in Vite. Preserve current CSP and WebSocket whitelist.
-- [ ] Repeat focused server tests and relevant `server.test.ts` / `ws.test.ts`; require all pass.
+- [x] Repeat focused server tests and relevant `server.test.ts` / `ws.test.ts`; require all pass.
   Inspect/commit the independently testable endpoint and document its actual bounds in README.
 
 ## Task 3: Discover typed surfaces and show local browser previews
@@ -136,24 +135,24 @@ surface ID/type and enables terminal polling/input only for terminal selections.
 `TreeSnapshot` surface rows and `useCmux` tree parsing add `urlLabel: string | null`, as defined in
 the spec; existing terminal-only helpers remain usable.
 
-- [ ] Write topology tests for browser/Markdown/filepreview discovery and stable workspace/pane order;
+- [x] Write topology tests for browser/Markdown/filepreview discovery and stable workspace/pane order;
   unknown types remain unsupported. Sanitize browser URL display to HTTP(S) origin only; test credentials,
   path tokens, query tokens, fragments, and file URLs never reach labels or navigation targets.
-- [ ] Add hook tests for one request on open/Refresh/foreground, no periodic capture, late responses
+- [x] Add hook tests for one request on open/Refresh/foreground, no periodic capture, late responses
   after selection changes, auth expiry, disconnect, and preserving only a visibly stale last capture
   after refresh errors. Check the exact POST route, empty body, and same-origin credentials.
   Bound response reading to 3 MiB before JSON parsing, including missing/dishonest Content-Length;
   reject a body exceeding that budget rather than relying on an unbounded `response.json()`.
-- [ ] Add UI tests for captured time, loading/error/unsupported states, local zoom boundaries and
+- [x] Add UI tests for captured time, loading/error/unsupported states, local zoom boundaries and
   scroll containers; no remote keys or browser controls. Markdown/native rows truthfully report unavailable.
-- [ ] Run `devenv shell -- bun run --cwd client test src/lib/__tests__/surface-preview.test.ts src/hooks/__tests__/useSurfacePreview.test.ts src/components/__tests__/SurfacePreview.test.tsx`;
+- [x] Run `devenv shell -- bun run --cwd client test src/lib/__tests__/surface-preview.test.ts src/hooks/__tests__/useSurfacePreview.test.ts src/components/__tests__/SurfacePreview.test.tsx`;
   confirm failures before adding the viewer.
-- [ ] Implement typed navigation and normalized response validation, the hook, and the local image
+- [x] Implement typed navigation and normalized response validation, the hook, and the local image
   viewer. Keep no preview bytes in browser storage; retain existing terminal behavior and Back flow.
-- [ ] Add complete fake browser PNG responses and E2E for view/zoom/Refresh/closure/reconnect/auth expiry.
+- [x] Add complete fake browser PNG responses and E2E for view/zoom/Refresh/closure/reconnect/auth expiry.
   Record cmux calls and assert no browser input, navigation, reload, viewport mutation, or arbitrary RPC.
   Add the preview POST path to service-worker exclusion tests without expanding its cache policy.
-- [ ] Repeat focused client tests and run `devenv shell -- bun run e2e -- e2e/preview.spec.ts e2e/terminal.spec.ts`;
+- [x] Repeat focused client tests and run `devenv shell -- bun run e2e -- e2e/preview.spec.ts e2e/terminal.spec.ts`;
   require both configured browser projects pass. Update README's current behavior only now, inspect,
   and commit the usable browser-preview milestone slice.
 

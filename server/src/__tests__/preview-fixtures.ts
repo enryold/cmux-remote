@@ -2,7 +2,7 @@
 // The CLI screenshot command consumes png_base64 locally; the raw socket RPC includes it.
 export const PREVIEW_WORKSPACE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 export const PREVIEW_SURFACE = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-export const PREVIEW_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==";
+export const PREVIEW_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNwy9vyHwAEzgJo8SKQuwAAAABJRU5ErkJggg==";
 export function browserPreviewFixture() {
   return {
     workspace_id: PREVIEW_WORKSPACE.toUpperCase(), workspace_ref: "workspace:1",

@@ -1,0 +1,1 @@
+export const imagePreview = { kind: "image", surfaceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", capturedAt: "2026-10-04T12:00:00.000Z", mime: "image/png", width: 1, height: 1, base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNwy9vyHwAEzgJo8SKQuwAAAABJRU5ErkJggg==" } as const;
