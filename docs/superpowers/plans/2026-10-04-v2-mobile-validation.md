@@ -1,7 +1,9 @@
 # Milestone 2 execution and validation — 2026-10-04
 
-Execution was authorized by the user on 2026-10-04. Work is isolated on
-`feat/v2-mobile-controls`; no merge, push, production launch, or Live event has occurred.
+Execution was authorized by the user on 2026-10-04. Implementation was developed in an isolated
+`feat/v2-mobile-controls` worktree and merged into `master` on 2026-10-04 after explicit user
+authorization. The existing Mac service was restarted for testing. No push or iPhone Live acceptance
+has occurred.
 
 ## Delivered scope
 
@@ -55,7 +57,8 @@ Markdown/image/browser viewing request is therefore not complete.
 The target iPhone PWA still needs the governing specs' real-device checklist, including the user's
 actual Codex/Claude menus, software Return/IME/paste, touch scrolling, font/keyboard layout, long
 backgrounding, and Tailscale reconnect. Automated iPhone WebKit is not hardware acceptance.
-Developed/Live dates remain `—` until merge and the applicable target-device checks.
+Developed is 2026-10-04 for terminal usability and browser screenshots after the merge; native
+previews remain `—`. All Milestone 2 Live dates remain `—` pending target-device acceptance.
 
 ## Execution decisions
 
@@ -69,3 +72,18 @@ Developed/Live dates remain `—` until merge and the applicable target-device c
   explicit retry decision while making ambiguity visible. Cost if wrong: one extra Close action.
 
 No minor findings were deferred and no review findings were declined.
+
+## Integration and service restart — 2026-10-04
+
+The user authorized merge into `master` and restart of the existing service. The merge was a
+fast-forward to implementation commit `09b3e52`; the upstream was already current. A fresh
+`devenv shell -- check` on `master` passed with the same counts above, and its complete output was
+inspected for failures and type errors. Documentation links and `git diff --check` also passed.
+
+`devenv shell -- service-restart` restarted `dev.cmux-remote.bridge` from the main repository.
+The LaunchAgent has a new process, reports running, and `/health` reports `ok` and cmux connected.
+The served HTML references the current built asset, which contains the new Shortcuts and preview
+UI. The existing ignored configuration and signing secret were preserved; pairing mode remains
+enabled. A previously valid paired session survives this restart. A new pairing field is available
+only when Tailscale authorizes the requesting device; a direct unauthenticated localhost request
+correctly reports the device unauthorized. Browser previews remain read-only, including login pages.

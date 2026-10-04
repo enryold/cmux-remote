@@ -90,7 +90,7 @@ unload the agent and remove its plist from `~/Library/LaunchAgents`.
 
 ## Current status
 
-This branch adds Milestone 2 terminal usability and browser previews to the reliable terminal build:
+The current build provides Milestone 2 terminal usability and browser previews alongside the reliable terminal:
 
 - dynamic workspace, pane, and typed-surface discovery without fixed names or counts;
 - a dense mobile dashboard with exact-surface navigation and browser back support;

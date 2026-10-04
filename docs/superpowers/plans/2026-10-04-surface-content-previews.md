@@ -14,7 +14,7 @@ devenv; no rendering or streaming dependency for the simple browser viewer.
 
 **Spec:** [Surface content previews](../specs/2026-10-04-surface-content-previews-design.md)
 
-**Status:** execution authorized on 2026-10-04; browser Tasks 1–3 implemented on the feature branch. Task 4 remains blocked by the verified installed socket contract. Final review/acceptance are recorded below.
+**Status:** execution authorized on 2026-10-04; browser Tasks 1–3 implemented and merged into `master` on 2026-10-04. Task 4 remains blocked by the verified installed socket contract. Final review/acceptance are recorded below.
 
 ## Global Constraints
 
@@ -199,7 +199,7 @@ lifecycle only when the applicable events actually occur.
   discovery/input/reconnect. Verify native panels as well only after Task 4 succeeds.
 - [x] Record partial acceptance accurately. Browser screenshots can pass independently; the full
   Markdown/image/browser viewing request cannot be declared complete while Task 4 is blocked.
-- [ ] Commit verified changes; set Developed after merge and Live only after the applicable real
+- [x] Commit verified changes; set Developed after merge and Live only after the applicable real
   Mac/iPhone checks. Do not deploy or mark lifecycle dates merely because this plan was written.
 
 ## Handoff

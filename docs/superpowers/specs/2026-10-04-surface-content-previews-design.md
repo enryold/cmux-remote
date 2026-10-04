@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-04
 
-**Status:** approved for execution on 2026-10-04; browser screenshots implemented on the feature branch; native Markdown/image reads remain blocked. Merge and hardware iPhone acceptance are pending.
+**Status:** approved for execution on 2026-10-04; browser screenshots merged into `master` on 2026-10-04; full check passed; native Markdown/image reads remain blocked and hardware iPhone acceptance is pending.
 
 ## Intent and scope
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-04
 
-**Status:** approved for execution on 2026-10-04; implemented on the feature branch, pending merge and hardware iPhone acceptance.
+**Status:** approved for execution on 2026-10-04; implemented and merged into `master` on 2026-10-04; full check passed; hardware iPhone acceptance remains pending.
 
 ## Intent and acceptance
 

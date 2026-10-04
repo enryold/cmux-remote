@@ -14,7 +14,7 @@ repository devenv. No new runtime dependency.
 
 **Spec:** [Mobile terminal usability](../specs/2026-10-04-mobile-terminal-usability-design.md)
 
-**Status:** execution authorized on 2026-10-04; Tasks 1–6 implemented on the feature branch. Final review and acceptance are recorded below; merge/hardware iPhone checks remain pending.
+**Status:** execution authorized on 2026-10-04; Tasks 1–6 implemented and merged into `master` on 2026-10-04. Final review and merged-tree verification passed; hardware iPhone acceptance remains pending.
 
 ## Global Constraints
 
