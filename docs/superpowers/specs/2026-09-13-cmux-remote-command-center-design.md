@@ -4,6 +4,14 @@
 
 **Status:** approved after architecture assessment with Enrico
 
+**Version assignment update — 2026-10-04:** the agent dashboard described below as Milestone 2
+has been reassigned to Milestone 3. The new Milestone 2 direction covers
+[mobile terminal usability](2026-10-04-mobile-terminal-usability-design.md) and
+[read-only content previews](2026-10-04-surface-content-previews-design.md), including browser
+discovery previously assigned to Milestone 3. Those written designs are prepared for review.
+See the [roadmap](../ROADMAP.md) for current assignments; the dated design below preserves the
+original milestone sequence.
+
 ## Objective
 
 Evolve `hummer98/cmux-remote` into a secure, mobile-first WebApp/PWA for monitoring and controlling
