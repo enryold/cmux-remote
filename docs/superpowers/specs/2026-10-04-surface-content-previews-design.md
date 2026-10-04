@@ -19,6 +19,15 @@ and reconnect throughout this work.
 
 Assessment on 2026-10-04: installed cmux `0.64.25 (106)`, commit `b685a275c`, socket automation mode.
 
+Execution recheck on the same version: a disposable browser displaying deterministic local public
+HTML returned a valid 80,755-byte PNG (1,462 × 1,818 pixels) from raw `browser.screenshot` with
+explicit workspace/surface UUIDs. The complete result has `workspace_id`, `workspace_ref`,
+`surface_id`, `surface_ref`, `png_base64`, `path`, and `url`; IDs use uppercase and dimensions come
+from PNG IHDR bytes, not response metadata. The CLI `browser screenshot --json` consumes the bytes
+and only prints path/ref fields, so the bridge must use the socket RPC. The temporary viewport
+override was reset. Repeating the nonexistent-panel native request reproduced the handler error
+below; native delivery remains blocked.
+
 - `system.tree` discovers typed surfaces, including `browser`, `markdown`, and `filepreview`.
   Installed live surfaces happened to be terminal-only; no existing user content was captured.
 - `browser.screenshot` is an advertised socket method. Matching upstream source returns
