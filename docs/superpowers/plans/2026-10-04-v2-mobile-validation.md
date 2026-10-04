@@ -87,3 +87,25 @@ UI. The existing ignored configuration and signing secret were preserved; pairin
 enabled. A previously valid paired session survives this restart. A new pairing field is available
 only when Tailscale authorizes the requesting device; a direct unauthenticated localhost request
 correctly reports the device unauthorized. Browser previews remain read-only, including login pages.
+
+## Touch scrolling maintenance — 2026-10-04
+
+The user reported that terminal swipes moved the surrounding bars instead of scrolling output.
+A native Chromium touch gesture reproduced a related scroll stall: after reversing at the bottom
+edge, history moved only 40 px. The initial touch targeted a rendered text span; xterm's DOM renderer
+replaced that span on the first scroll, so subsequent touch events no longer reached the terminal.
+Changing touch policy alone did not fix this detached-target failure.
+
+Rendered rows now ignore pointer hit testing so gestures target the stable xterm screen. The terminal
+container also disables browser panning, leaving xterm's existing touch-scroll handler in control at
+history boundaries. Mouse selection remains usable. No replacement scroll handler was introduced.
+
+The regression failed before the fix and passes after it. It checks a continuous edge/reversal swipe,
+visible history, stationary header/controls/footer, Latest, and a visible text selection. Chromium
+uses native CDP touch input; iPhone WebKit uses DOM touch events because Playwright exposes taps only.
+This does not establish hardware iPhone acceptance or change the roadmap's Live dates.
+
+A fresh `devenv shell -- check` passed: lint, 72 client, 56 server, 21 setup, and 3 LaunchAgent tests,
+both typechecks, production build, and 25 E2E tests with 1 intentional Chromium pairing skip. The full
+output was inspected. `git diff --check` passed. The existing service was restarted; local and
+configured HTTPS checks report cmux connected and serve the current CSS containing both scroll fixes.

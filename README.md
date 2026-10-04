@@ -95,6 +95,7 @@ The current build provides Milestone 2 terminal usability and browser previews a
 - dynamic workspace, pane, and typed-surface discovery without fixed names or counts;
 - a dense mobile dashboard with exact-surface navigation and browser back support;
 - xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
+  touch gestures scroll terminal history while the header and bottom controls stay in place;
 - direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
 - a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab), saved commands,
   toolbar favorites, and locally persisted terminal font size;

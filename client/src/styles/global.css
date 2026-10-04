@@ -198,13 +198,19 @@ button {
   min-height: 0;
   flex: 1;
   overflow: hidden;
-  touch-action: pan-y;
+  /* xterm handles touch scrolling; the browser must not pan the page at its edges. */
+  touch-action: none;
   user-select: text;
   -webkit-user-select: text;
 }
 
 .terminal-container > .xterm {
   padding: 6px 4px 0;
+}
+
+.terminal-container .xterm-rows {
+  /* Repainted spans detach mid-swipe. Hit the stable xterm screen instead. */
+  pointer-events: none;
 }
 
 .terminal-stale,

@@ -120,3 +120,67 @@ test("keeps the final terminal row above the mobile controls", async ({ page }) 
     })
     .toBeLessThanOrEqual(0);
 });
+
+test("keeps touch scrolling in the terminal when reversing at its bottom edge", async ({ page, browserName }) => {
+  await page.setViewportSize({ width: 393, height: 647 });
+  await login(page);
+  await page.getByRole("button", { name: "Shell", exact: true }).click();
+  const composer = page.getByRole("textbox", { name: "Prompt or command" });
+  await composer.fill("fixture:scroll");
+  await composer.press("Enter");
+  await composer.blur();
+  const terminal = page.getByRole("region", { name: "Terminal" });
+  const text = terminal.locator(".xterm-accessibility-tree");
+  await expect(text).toContainText("history 1999");
+  const viewport = terminal.locator(".xterm-viewport");
+  const bottom = await viewport.evaluate((element) => element.scrollTop);
+  expect(bottom).toBeGreaterThan(1_000);
+  const bars = page.locator(".app-header, .terminal-controls, .status-bar");
+  const positions = await bars.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().y));
+  const screen = await terminal.locator(".xterm-screen").boundingBox();
+  if (!screen) throw new Error("Missing terminal screen");
+  const x = screen.x + 30;
+  const y = screen.y + screen.height / 2;
+  // Push past the newest output, then reverse without lifting the finger.
+  const offsets = [-20, -50, -100, -120, -80, -40, 0, 50, 100];
+  if (browserName === "chromium") {
+    const session = await page.context().newCDPSession(page);
+    await session.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (const offset of offsets) {
+      await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + offset }] });
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+    }
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await session.detach();
+  } else {
+    // Playwright WebKit exposes taps only; exercise xterm's touch handlers with DOM events.
+    await page.evaluate(async ({ x, y, offsets }) => {
+      // Touch events keep their original hit target even after terminal rows are repainted.
+      const element = document.elementFromPoint(x, y);
+      if (!element) throw new Error("Missing terminal touch target");
+      const touch = (type: string, pageY: number) => {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "touches", { value: type === "touchend" ? [] : [{ pageX: x, pageY }] });
+        element.dispatchEvent(event);
+      };
+      touch("touchstart", y);
+      for (const offset of offsets) {
+        touch("touchmove", y + offset);
+        await new Promise(requestAnimationFrame);
+      }
+      touch("touchend", y + offsets[offsets.length - 1]);
+    }, { x, y, offsets });
+  }
+  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeLessThan(bottom - 60);
+  await expect(text).not.toContainText("history 1999");
+  expect(await bars.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().y))).toEqual(positions);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.getByRole("button", { name: "Latest", exact: true }).click();
+  await expect(text).toContainText("history 1999");
+  await page.mouse.move(screen.x + 10, screen.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(screen.x + 100, screen.y + 8, { steps: 5 });
+  await page.mouse.up();
+  await expect(terminal.locator(".xterm-selection > div").first()).toBeVisible();
+});
