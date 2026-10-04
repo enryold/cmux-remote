@@ -41,6 +41,11 @@ export function ShortcutMenu({ settings, connected, busy, onInvoke, onClose, ret
         }}>
         <div className="shortcut-heading"><h2>Shortcuts</h2><button type="button" aria-label="Close shortcuts" onClick={onClose}>Close</button></div>
         <p>Choose ★ to show a shortcut in the toolbar. Commands run in this terminal.</p>
+        <fieldset className="font-controls" aria-label="Terminal font size">
+          <button type="button" aria-label="Decrease font" disabled={preferences.fontSize <= 10} onClick={() => settings.setFontSize(preferences.fontSize - 1)}>A−</button>
+          <span>{preferences.fontSize} px</span>
+          <button type="button" aria-label="Increase font" disabled={preferences.fontSize >= 24} onClick={() => settings.setFontSize(preferences.fontSize + 1)}>A+</button>
+        </fieldset>
         {persistenceError ? <p role="status">{persistenceError}</p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <h3>Keys</h3>

@@ -262,6 +262,8 @@ by cmux but intentionally not exposed for control in Milestone 1.
 Terminal snapshots are coalesced while a write, touch gesture, or selection is active. Appended
 output keeps the same xterm buffer; changed prompts retain the visible history where it remains
 available. **Latest** returns to the bottom without sending input to cmux.
+The **A− / A+** controls in Shortcuts set the terminal font from 10 to 24 px and persist on this
+device. The terminal refits without being recreated or changing the Mac's global font settings.
 
 ## Real-device release checklist
 

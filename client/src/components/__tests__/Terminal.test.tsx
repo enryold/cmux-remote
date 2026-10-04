@@ -20,7 +20,7 @@ vi.mock("@xterm/xterm", () => ({ Terminal: class {
 } }));
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }));
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
-afterEach(() => { cleanup(); fake.instances = []; });
+afterEach(() => { cleanup(); fake.instances = []; localStorage.clear(); });
 function Screen({ content }: { content: string }) {
   return <Terminal surfaceId="original" content={content} stale={false} viewportEnabled={false} connected settings={useTerminalPreferences()}
     onInput={vi.fn()} onKey={vi.fn()} onSubmit={vi.fn()} onViewport={vi.fn()} onViewportClear={vi.fn()} />;
@@ -32,6 +32,21 @@ it("serializes xterm writes and retains only the latest waiting snapshot", () =>
   expect(terminal.writes.map((item) => item.text)).toEqual(["one"]);
   act(() => terminal.writes[0]?.done());
   expect(terminal.writes.map((item) => item.text)).toEqual(["one", "three"]);
+});
+
+it("changes font without replacing the terminal or writing output again", () => {
+  render(<Screen content="one" />);
+  const terminal = fake.instances[0]; if (!terminal) throw new Error("missing terminal");
+  act(() => terminal.writes[0]?.done());
+  fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
+  fireEvent.click(screen.getByRole("button", { name: "Increase font" }));
+  expect(terminal.options.fontSize).toBe(14);
+  expect(fake.instances).toHaveLength(1);
+  expect(terminal.writes).toHaveLength(1);
+  for (let i = 0; i < 20; i++) fireEvent.click(screen.getByRole("button", { name: "Increase font" }));
+  expect(terminal.options.fontSize).toBe(24);
+  for (let i = 0; i < 20; i++) fireEvent.click(screen.getByRole("button", { name: "Decrease font" }));
+  expect(terminal.options.fontSize).toBe(10);
 });
 it("defers snapshots through touch gestures and selection", () => {
   const { rerender } = render(<Screen content="one" />);

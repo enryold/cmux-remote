@@ -31,6 +31,46 @@ test("reads, types, sends mobile keys, and switches exact surfaces", async ({ pa
   await expect(nextText).not.toContainText("status<enter>");
 });
 
+test("saves launcher favorites, operates a question menu, and persists font", async ({ page }) => {
+  const inputs: Array<{ method: string; params: { text?: string; key?: string } }> = [];
+  page.on("websocket", (socket) => socket.on("framesent", (frame) => {
+    const message = JSON.parse(String(frame.payload));
+    if (message.method === "surface.send_key" || message.method === "surface.send_text") inputs.push(message);
+  }));
+  await login(page);
+  await page.getByRole("button", { name: "Tests", exact: true }).click();
+  await page.getByRole("button", { name: "Shortcuts" }).click();
+  const dialog = page.getByRole("dialog", { name: "Shortcuts" });
+  await dialog.getByLabel("Shortcut name").fill("Launch Codex");
+  await dialog.getByLabel("Command", { exact: true }).fill("codex-dsp");
+  await dialog.getByRole("button", { name: "Save command" }).click();
+  await dialog.getByRole("button", { name: "Pin Launch Codex" }).click();
+  await dialog.getByRole("button", { name: "Increase font" }).click();
+  await expect(dialog.getByText("14 px", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Close shortcuts" }).click();
+  await expect(page.locator(".xterm-rows")).toHaveCSS("font-size", "14px");
+  expect(inputs).toHaveLength(0);
+  await page.getByRole("button", { name: "Launch Codex", exact: true }).click();
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("codex-dsp<enter>");
+  const composer = page.getByRole("textbox", { name: "Prompt or command" });
+  await composer.fill("fixture:question"); await composer.press("Enter");
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("Open choices with Shift+Left");
+  await page.getByRole("button", { name: "Shift+←", exact: true }).click();
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("Choice 1");
+  await page.getByRole("button", { name: "↓", exact: true }).click();
+  await composer.press("Enter");
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("Confirmed choice 2");
+  expect(inputs.filter((item) => item.params.text === "codex-dsp")).toHaveLength(1);
+  const prior = inputs.length;
+  await page.evaluate(() => window.dispatchEvent(new Event("pageshow")));
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Tests", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Launch Codex", exact: true })).toBeVisible();
+  await expect(page.locator(".xterm-rows")).toHaveCSS("font-size", "14px");
+  expect(inputs).toHaveLength(prior);
+});
+
 test("preserves the visible history during append and prompt replacement", async ({ page }) => {
   let received = "";
   page.on("websocket", (socket) => socket.on("framereceived", (frame) => {

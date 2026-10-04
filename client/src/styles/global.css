@@ -314,6 +314,7 @@ button {
   background: #171b24;
 }
 .shortcut-heading { display: flex; justify-content: space-between; align-items: center; }
+.font-controls { display: flex; align-items: center; gap: 14px; }
 .shortcut-sheet h2 { margin: 0; }
 .shortcut-sheet p { color: #aab1be; font-size: 13px; }
 .shortcut-sheet button, .shortcut-sheet input {

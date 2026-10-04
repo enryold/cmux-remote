@@ -29,6 +29,7 @@ export function Terminal(props: TerminalProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<XTerm | null>(null);
   const applySnapshotRef = useRef<(content: string) => void>(() => undefined);
+  const refitRef = useRef<() => void>(() => undefined);
   const callbacksRef = useRef(props);
   callbacksRef.current = props;
 
@@ -41,7 +42,7 @@ export function Terminal(props: TerminalProps) {
       cursorBlink: true,
       disableStdin: false,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
-      fontSize: 13,
+      fontSize: callbacksRef.current.settings.preferences.fontSize,
       screenReaderMode: true,
       scrollback: 2_000,
       theme: {
@@ -62,6 +63,35 @@ export function Terminal(props: TerminalProps) {
     let disposed = false;
     let touching = false;
     let gestureRevision = 0;
+    let fitFrame: number | null = null;
+    let fitRequested = false;
+    const scheduleFit = () => {
+      fitRequested = true;
+      if (fitFrame !== null || writing || touching || disposed) return;
+      fitFrame = requestAnimationFrame(() => {
+        fitFrame = null;
+        if (writing || touching || disposed) return;
+        fitRequested = false;
+        const buffer = term.buffer.active;
+        const bottom = buffer.viewportY === buffer.baseY;
+        let firstLine = buffer.viewportY;
+        while (firstLine > 0 && buffer.getLine(firstLine)?.isWrapped) firstLine--;
+        const anchor = buffer.getLine(firstLine)?.translateToString(true) ?? "";
+        const offset = (buffer.viewportY - firstLine) * term.cols;
+        fit.fit();
+        if (bottom) term.scrollToBottom();
+        else {
+          const active = term.buffer.active;
+          let found = -1;
+          const prefix = anchor.slice(0, Math.min(20, term.cols));
+          for (let i = 0; prefix && i < active.length; i++) {
+            if (!active.getLine(i)?.isWrapped && active.getLine(i)?.translateToString(true).startsWith(prefix)) { found = i; break; }
+          }
+          term.scrollToLine(found < 0 ? 0 : found + Math.floor(offset / term.cols));
+        }
+      });
+    };
+    refitRef.current = scheduleFit;
     let composing = false;
     let pasting = false;
     const startComposition = () => { composing = true; };
@@ -108,10 +138,11 @@ export function Terminal(props: TerminalProps) {
           }
         }
         flushSnapshot();
+        if (fitRequested) scheduleFit();
       });
     };
     const startTouch = () => { touching = true; gestureRevision++; };
-    const endTouch = () => { touching = false; flushSnapshot(); };
+    const endTouch = () => { touching = false; flushSnapshot(); if (fitRequested) scheduleFit(); };
     const onWheel = () => { gestureRevision++; };
     container.addEventListener("touchstart", startTouch, { passive: true });
     container.addEventListener("touchend", endTouch, { passive: true });
@@ -137,11 +168,12 @@ export function Terminal(props: TerminalProps) {
     term.open(container);
     fit.fit();
     termRef.current = term;
-    const resizeObserver = new ResizeObserver(() => fit.fit());
+    const resizeObserver = new ResizeObserver(scheduleFit);
     resizeObserver.observe(container);
 
     return () => {
       disposed = true;
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame);
       container.removeEventListener("touchstart", startTouch);
       container.removeEventListener("touchend", endTouch);
       container.removeEventListener("touchcancel", endTouch);
@@ -156,12 +188,20 @@ export function Terminal(props: TerminalProps) {
         callbacksRef.current.onViewportClear(generation);
       }
       applySnapshotRef.current = () => undefined;
+      refitRef.current = () => undefined;
       termRef.current = null;
       term.dispose();
     };
   }, []);
 
   useEffect(() => applySnapshotRef.current(props.content), [props.content]);
+  const fontSize = props.settings.preferences.fontSize;
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || term.options.fontSize === fontSize) return;
+    term.options.fontSize = fontSize;
+    refitRef.current();
+  }, [fontSize]);
 
   const focus = () => termRef.current?.focus();
   const sendKey = (key: AllowedKey) => {
