@@ -123,6 +123,22 @@ describe("useCmux", () => {
     await expect(pending).rejects.toThrow("bridge_disconnected");
   });
 
+  it("invalidates input synchronously on cmux and bridge disconnection", async () => {
+    const { result } = renderHook(() => useCmux());
+    const socket = await bootstrap(result);
+    const generation = result.current.connectionGeneration;
+    expect(result.current.isConnectionCurrent(generation)).toBe(true);
+    act(() => {
+      socket.receive('{"type":"state","cmux":"disconnected"}');
+      expect(result.current.isConnectionCurrent(generation)).toBe(false);
+      socket.receive('{"type":"state","cmux":"connected"}');
+    });
+    expect(result.current.connectionGeneration).toBeGreaterThan(generation);
+    expect(result.current.isConnectionCurrent(generation)).toBe(false);
+    const next = result.current.connectionGeneration;
+    act(() => { socket.closeFromServer(); expect(result.current.isConnectionCurrent(next)).toBe(false); });
+  });
+
   it("coalesces topology event bursts into one tree refresh", async () => {
     const { result } = renderHook(() => useCmux());
     const socket = await bootstrap(result);

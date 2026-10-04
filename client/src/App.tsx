@@ -7,7 +7,8 @@ import { Terminal } from "./components/Terminal";
 import { useAuth } from "./hooks/useAuth";
 import { useCmux } from "./hooks/useCmux";
 import { useTerminalPolling } from "./hooks/useTerminalPolling";
-import type { AllowedKey, ConnectionStatus } from "./lib/cmux-rpc";
+import type { ConnectionStatus } from "./lib/cmux-rpc";
+import { createTerminalInputDispatcher, submissionError, type TerminalInput } from "./lib/terminal-input";
 import {
   recoverSelectedSurface,
   terminalWorkspaces,
@@ -48,6 +49,14 @@ function CommandCenter({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [inputError, setInputError] = useState<string | null>(null);
+  const selectionRef = useRef({ id: selectedId, revision: 0 });
+  if (selectionRef.current.id !== selectedId) selectionRef.current = { id: selectedId, revision: selectionRef.current.revision + 1 };
+  const selectSurface = (id: string | null) => {
+    selectionRef.current = { id, revision: selectionRef.current.revision + 1 };
+    setSelectedId(id);
+  };
+  const apiRef = useRef(cmux);
+  apiRef.current = cmux;
   const inputErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaces = useMemo(() => terminalWorkspaces(cmux.tree), [cmux.tree]);
   const selected = workspaces
@@ -64,7 +73,7 @@ function CommandCenter({
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       const state = event.state as { surfaceId?: unknown } | null;
-      setSelectedId(typeof state?.surfaceId === "string" ? state.surfaceId : null);
+      selectSurface(typeof state?.surfaceId === "string" ? state.surfaceId : null);
       setInputError(null);
     };
     window.addEventListener("popstate", onPopState);
@@ -76,7 +85,7 @@ function CommandCenter({
       selectedId !== null &&
       recoverSelectedSurface(cmux.tree, selectedId) === null
     ) {
-      setSelectedId(null);
+      selectSurface(null);
       setNotice("Terminal closed");
       if (history.state?.surfaceId) history.back();
       else history.replaceState(null, "", location.pathname);
@@ -92,47 +101,37 @@ function CommandCenter({
     [],
   );
 
-  const showInputError = useCallback(() => {
-    setInputError("Input was not sent");
+  const showInputError = useCallback((message = "Input was not sent") => {
+    setInputError(message);
     if (inputErrorTimer.current !== null) clearTimeout(inputErrorTimer.current);
     inputErrorTimer.current = setTimeout(() => setInputError(null), 3_000);
   }, []);
 
-  const sendText = useCallback(
-    async (text: string) => {
-      if (!selectedId) return false;
-      try {
-        await cmux.sendText(selectedId, text);
-        setInputError(null);
-        polling.refreshNow();
-        return true;
-      } catch {
-        showInputError();
-        return false;
-      }
-    }, [cmux.sendText, polling.refreshNow, selectedId, showInputError],
-  );
-
-  const sendKey = useCallback(
-    async (key: AllowedKey) => {
-      if (!selectedId) return false;
-      try {
-        await cmux.sendKey(selectedId, key);
-        setInputError(null);
-        polling.refreshNow();
-        return true;
-      } catch {
-        showInputError();
-        return false;
-      }
-    }, [cmux.sendKey, polling.refreshNow, selectedId, showInputError],
-  );
-
-  const submitPrompt = useCallback(
-    async (text: string) =>
-      (await sendText(text)) && (await sendKey("enter")),
-    [sendKey, sendText],
-  );
+  const generation = cmux.connectionGeneration;
+  const dispatcher = useMemo(() => {
+    const revision = selectionRef.current.revision;
+    return createTerminalInputDispatcher({
+      sendText: cmux.sendText, sendKey: cmux.sendKey,
+      isCurrent: (id, capturedGeneration) => selectionRef.current.id === id
+        && selectionRef.current.revision === revision && apiRef.current.isConnectionCurrent(capturedGeneration),
+    });
+  }, [selectedId, generation, cmux.sendText, cmux.sendKey]);
+  const sendInput = async (input: TerminalInput) => {
+    if (!selectedId) return;
+    try {
+      await dispatcher.send(selectedId, generation, input);
+      setInputError(null);
+      polling.refreshNow();
+    } catch { showInputError(); }
+  };
+  const submitPrompt = async (text: string) => {
+    const result = await dispatcher.submit(selectedId ?? "", generation, text);
+    const error = submissionError(result, text);
+    if (error) showInputError(error);
+    else setInputError(null);
+    polling.refreshNow();
+    return result;
+  };
 
   const connection: ConnectionStatus = terminalConnected
     ? "connected"
@@ -143,7 +142,7 @@ function CommandCenter({
   const openTerminal = (surfaceId: string) => {
     history.pushState({ surfaceId }, "", "#terminal");
     setNotice(null);
-    setSelectedId(surfaceId);
+    selectSurface(surfaceId);
   };
 
   return (
@@ -154,8 +153,8 @@ function CommandCenter({
           <Terminal
             key={selectedId}
             content={polling.content}
-            onInput={(text) => void sendText(text)}
-            onKey={(key) => void sendKey(key)}
+            onInput={(input) => void sendInput(input)}
+            onKey={(key) => void sendInput({ kind: "key", key })}
             onSubmit={submitPrompt}
             onViewport={(columns, rows, generation) => {
               void cmux

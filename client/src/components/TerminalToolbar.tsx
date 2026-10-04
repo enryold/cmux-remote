@@ -1,9 +1,10 @@
-import { type FormEvent, useState } from "react";
+import { useRef, useState } from "react";
 import type { AllowedKey } from "../lib/cmux-rpc";
+import type { SubmitResult } from "../lib/terminal-input";
 
 interface TerminalToolbarProps {
   onKey(key: AllowedKey): void;
-  onSubmit(text: string): Promise<boolean>;
+  onSubmit(text: string): Promise<SubmitResult>;
   onCtrl?(): void;
   ctrlActive?: boolean;
 }
@@ -26,18 +27,20 @@ export function TerminalToolbar({
 }: TerminalToolbarProps) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const inFlight = useRef(false);
+  const composing = useRef(false);
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (text.length === 0 || submitting) return;
+  const submit = async () => {
+    if (composing.current || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
-    if (await onSubmit(text)) setText("");
-    setSubmitting(false);
+    try { if (await onSubmit(text) === "accepted") setText(""); }
+    finally { inFlight.current = false; setSubmitting(false); }
   };
 
   return (
     <div className="terminal-controls">
-      <form className="terminal-composer" onSubmit={(event) => void submit(event)}>
+      <form className="terminal-composer" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <input
           aria-label="Prompt or command"
           autoCapitalize="none"
@@ -47,13 +50,21 @@ export function TerminalToolbar({
           enterKeyHint="send"
           maxLength={4_096}
           onChange={(event) => setText(event.target.value)}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={() => { composing.current = false; }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            if (event.nativeEvent.isComposing || composing.current || event.keyCode === 229) return;
+            event.preventDefault();
+            void submit();
+          }}
           placeholder="Prompt or command"
           spellCheck={false}
           type="text"
           value={text}
         />
         <button
-          disabled={submitting || text.length === 0}
+          disabled={submitting}
           type="submit"
         >
           Send

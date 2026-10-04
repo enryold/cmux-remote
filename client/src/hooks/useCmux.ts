@@ -18,6 +18,8 @@ interface PendingRequest {
 }
 
 export interface CmuxApi {
+  connectionGeneration: number;
+  isConnectionCurrent(generation: number): boolean;
   bridgeStatus: ConnectionStatus;
   cmuxStatus: "connected" | "disconnected";
   capabilities: string[];
@@ -144,6 +146,30 @@ export function useCmux(
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [tree, setTree] = useState<TreeSnapshot>(EMPTY_TREE);
   const pendingRef = useRef(new Map<string, PendingRequest>());
+  const connectionRef = useRef({ generation: 0, bridge: false, cmux: false });
+  const [connectionGeneration, setConnectionGeneration] = useState(0);
+  const invalidate = useCallback(() => {
+    connectionRef.current.generation++;
+    setConnectionGeneration(connectionRef.current.generation);
+    for (const pending of pendingRef.current.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error("bridge_disconnected"));
+    }
+    pendingRef.current.clear();
+  }, []);
+  const isConnectionCurrent = useCallback((generation: number) => {
+    const connection = connectionRef.current;
+    return generation === connection.generation && connection.bridge && connection.cmux;
+  }, []);
+  const onBridgeStatus = useCallback((status: ConnectionStatus) => {
+    const connection = connectionRef.current;
+    if (status !== "connected") {
+      invalidate();
+      connection.cmux = false;
+      setCmuxStatus("disconnected");
+    }
+    connection.bridge = status === "connected";
+  }, [invalidate]);
   const topologyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshTreeRef = useRef<() => Promise<TreeSnapshot>>(() =>
     Promise.reject(new Error("bridge_disconnected")),
@@ -168,6 +194,8 @@ export function useCmux(
     }
 
     if (message.type === "state") {
+      if (message.cmux === "disconnected") invalidate();
+      connectionRef.current.cmux = message.cmux === "connected";
       setCmuxStatus(message.cmux);
       return;
     }
@@ -177,7 +205,7 @@ export function useCmux(
       topologyTimerRef.current = null;
       void refreshTreeRef.current().catch(() => undefined);
     }, 100);
-  }, []);
+  }, [invalidate]);
 
   const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
   const { status: bridgeStatus, send } = useWebSocket({
@@ -185,6 +213,7 @@ export function useCmux(
     enabled,
     onMessage: handleMessage,
     onUnauthorized,
+    onStatusChange: onBridgeStatus,
   });
 
   const rpc = useCallback(
@@ -291,7 +320,7 @@ export function useCmux(
     void getCapabilities()
       .then(() => refreshTree())
       .catch(() => undefined);
-  }, [bridgeStatus, getCapabilities, refreshTree]);
+  }, [bridgeStatus, connectionGeneration, getCapabilities, refreshTree]);
 
   useEffect(() => {
     if (bridgeStatus !== "connected") return;
@@ -331,6 +360,8 @@ export function useCmux(
   );
 
   return {
+    connectionGeneration,
+    isConnectionCurrent,
     bridgeStatus,
     cmuxStatus,
     capabilities,

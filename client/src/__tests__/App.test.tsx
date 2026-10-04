@@ -35,6 +35,8 @@ const auth = {
 
 function cmuxApi(): CmuxApi {
   return {
+    connectionGeneration: 1,
+    isConnectionCurrent: (generation) => generation === 1,
     bridgeStatus: "connected",
     cmuxStatus: "connected",
     capabilities: ["terminal.viewport.v1"],
@@ -103,9 +105,9 @@ it("submits prompt text before the terminal Enter key", async () => {
   const terminal = mocks.terminal.mock.calls[
     mocks.terminal.mock.calls.length - 1
   ]?.[0] as {
-    onSubmit(text: string): Promise<boolean>;
+    onSubmit(text: string): Promise<string>;
   };
-  await expect(terminal.onSubmit("continue the task")).resolves.toBe(true);
+  await expect(terminal.onSubmit("continue the task")).resolves.toBe("accepted");
 
   expect(api.sendText).toHaveBeenCalledWith(terminalA, "continue the task");
   expect(api.sendKey).toHaveBeenCalledWith(terminalA, "enter");
@@ -127,4 +129,21 @@ it("leaves keyboard viewport sizing to CSS", () => {
   render(<App />);
 
   expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("");
+});
+
+it("cancels late Enter when leaving the original terminal", async () => {
+  const api = cmuxApi();
+  let acknowledge!: () => void;
+  vi.mocked(api.sendText).mockImplementation(() => new Promise<void>((resolve) => { acknowledge = resolve; }));
+  mocks.useCmux.mockReturnValue(api);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+  const terminal = mocks.terminal.mock.lastCall?.[0] as { onSubmit(text: string): Promise<string> };
+  const result = terminal.onSubmit("launch");
+  await waitFor(() => expect(api.sendText).toHaveBeenCalledOnce());
+  act(() => window.dispatchEvent(new PopStateEvent("popstate", { state: null })));
+  fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+  acknowledge();
+  await expect(result).resolves.toBe("enter_unconfirmed");
+  expect(api.sendKey).not.toHaveBeenCalled();
 });

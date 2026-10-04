@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { AllowedKey } from "../lib/cmux-rpc";
+import { normalizeTerminalInput, type SubmitResult, type TerminalInput } from "../lib/terminal-input";
 import {
   cleanTerminalSnapshot,
   controlText,
@@ -15,9 +16,9 @@ interface TerminalProps {
   content: string;
   stale: boolean;
   viewportEnabled: boolean;
-  onInput(text: string): void;
+  onInput(input: TerminalInput): void;
   onKey(key: AllowedKey): void;
-  onSubmit(text: string): Promise<boolean>;
+  onSubmit(text: string): Promise<SubmitResult>;
   onViewport(columns: number, rows: number, generation: number): void;
   onViewportClear(generation: number): void;
 }
@@ -57,6 +58,14 @@ export function Terminal(props: TerminalProps) {
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     let applied: string | null = null;
     let pending: string | null = null;
+    let composing = false;
+    let pasting = false;
+    const startComposition = () => { composing = true; };
+    const endComposition = () => { setTimeout(() => { composing = false; }, 0); };
+    const paste = () => { pasting = true; queueMicrotask(() => { pasting = false; }); };
+    container.addEventListener("compositionstart", startComposition);
+    container.addEventListener("compositionend", endComposition);
+    container.addEventListener("paste", paste, true);
 
     const applySnapshot = (raw: string) => {
       const next = cleanTerminalSnapshot(raw);
@@ -89,11 +98,11 @@ export function Terminal(props: TerminalProps) {
         if (controlled !== null) {
           ctrlRef.current = false;
           setCtrlActive(false);
-          callbacksRef.current.onInput(controlled);
+          callbacksRef.current.onInput({ kind: "text", text: controlled });
           return;
         }
       }
-      callbacksRef.current.onInput(data);
+      callbacksRef.current.onInput(normalizeTerminalInput(data, { composing, paste: pasting }));
     });
     term.onSelectionChange(() => {
       if (!term.hasSelection() && pending !== null) applySnapshot(pending);
@@ -114,6 +123,9 @@ export function Terminal(props: TerminalProps) {
     resizeObserver.observe(container);
 
     return () => {
+      container.removeEventListener("compositionstart", startComposition);
+      container.removeEventListener("compositionend", endComposition);
+      container.removeEventListener("paste", paste, true);
       resizeObserver.disconnect();
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       if (callbacksRef.current.viewportEnabled) {

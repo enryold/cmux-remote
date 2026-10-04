@@ -6,6 +6,7 @@ export interface UseWebSocketOptions {
   enabled: boolean;
   onMessage: (data: string) => void;
   onUnauthorized?: () => void;
+  onStatusChange?: (status: ConnectionStatus) => void;
 }
 
 export function reconnectDelay(attempt: number, random: number): number {
@@ -18,6 +19,7 @@ export function useWebSocket({
   enabled,
   onMessage,
   onUnauthorized,
+  onStatusChange,
 }: UseWebSocketOptions): {
   status: ConnectionStatus;
   send: (data: string) => boolean;
@@ -31,6 +33,12 @@ export function useWebSocket({
   const onMessageRef = useRef(onMessage);
   const onUnauthorizedRef = useRef(onUnauthorized);
   const unmountedRef = useRef(false);
+  const onStatusRef = useRef(onStatusChange);
+  onStatusRef.current = onStatusChange;
+  const updateStatus = useCallback((next: ConnectionStatus) => {
+    onStatusRef.current?.(next);
+    setStatus(next);
+  }, []);
   onMessageRef.current = onMessage;
   onUnauthorizedRef.current = onUnauthorized;
 
@@ -42,7 +50,7 @@ export function useWebSocket({
   const connect = useCallback(() => {
     if (!enabled || unmountedRef.current) return;
     if (!navigator.onLine) {
-      setStatus("disconnected");
+      updateStatus("disconnected");
       return;
     }
     if (
@@ -53,7 +61,7 @@ export function useWebSocket({
     }
 
     clearRetry();
-    setStatus("connecting");
+    updateStatus("connecting");
 
     const scheduleRetry = () => {
       if (unmountedRef.current || !enabled) return;
@@ -66,7 +74,7 @@ export function useWebSocket({
     try {
       socket = new WebSocket(url);
     } catch {
-      setStatus("disconnected");
+      updateStatus("disconnected");
       scheduleRetry();
       return;
     }
@@ -75,15 +83,15 @@ export function useWebSocket({
     socket.onopen = () => {
       if (socketRef.current !== socket) return;
       retryRef.current = 0;
-      setStatus("connected");
+      updateStatus("connected");
     };
     socket.onmessage = (event) => {
-      if (typeof event.data === "string") onMessageRef.current(event.data);
+      if (socketRef.current === socket && typeof event.data === "string") onMessageRef.current(event.data);
     };
     socket.onclose = (event) => {
       if (socketRef.current !== socket) return;
       socketRef.current = null;
-      setStatus("disconnected");
+      updateStatus("disconnected");
       if (unmountedRef.current || !enabled) return;
       if (event.code === 4401) {
         onUnauthorizedRef.current?.();
@@ -110,12 +118,13 @@ export function useWebSocket({
         .catch(() => undefined);
     };
     socket.onerror = () => socket.close();
-  }, [clearRetry, enabled, url]);
+  }, [clearRetry, enabled, url, updateStatus]);
   connectRef.current = connect;
 
   const reconnectNow = useCallback(() => {
     if (!enabled || unmountedRef.current) return;
     clearRetry();
+    updateStatus("disconnected");
     const socket = socketRef.current;
     if (socket) {
       socket.onclose = null;
@@ -124,7 +133,7 @@ export function useWebSocket({
       socketRef.current = null;
     }
     connectRef.current();
-  }, [clearRetry, enabled]);
+  }, [clearRetry, enabled, updateStatus]);
 
   const send = useCallback((data: string): boolean => {
     const socket = socketRef.current;
@@ -142,13 +151,13 @@ export function useWebSocket({
       socket.close();
       socketRef.current = null;
     }
-    setStatus("disconnected");
-  }, [clearRetry]);
+    updateStatus("disconnected");
+  }, [clearRetry, updateStatus]);
 
   useEffect(() => {
     unmountedRef.current = false;
     if (enabled) connectRef.current();
-    else setStatus("disconnected");
+    else updateStatus("disconnected");
 
     return () => {
       unmountedRef.current = true;
@@ -161,7 +170,7 @@ export function useWebSocket({
       }
       socketRef.current = null;
     };
-  }, [clearRetry, enabled]);
+  }, [clearRetry, enabled, updateStatus]);
 
   useEffect(() => {
     if (!enabled) return;

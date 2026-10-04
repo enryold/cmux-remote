@@ -58,8 +58,8 @@ it("exposes the generic Ctrl key as a one-shot toggle", () => {
 it("submits a visible prompt and clears it only after accepted", async () => {
   const onSubmit = vi
     .fn()
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce(true);
+    .mockResolvedValueOnce("text_unconfirmed")
+    .mockResolvedValueOnce("accepted");
   render(<TerminalToolbar onKey={vi.fn()} onSubmit={onSubmit} />);
 
   const input = screen.getByRole("textbox", { name: "Prompt or command" });
@@ -72,4 +72,18 @@ it("submits a visible prompt and clears it only after accepted", async () => {
 
   fireEvent.submit(input.closest("form") as HTMLFormElement);
   await waitFor(() => expect((input as HTMLInputElement).value).toBe(""));
+});
+
+it("sends empty Return once and keeps composing Return local", async () => {
+  const onSubmit = vi.fn().mockResolvedValue("accepted");
+  render(<TerminalToolbar onKey={vi.fn()} onSubmit={onSubmit} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  fireEvent.compositionStart(input);
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.compositionEnd(input);
+  fireEvent.keyDown(input, { key: "Enter" });
+  fireEvent.submit(input.closest("form") as HTMLFormElement);
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+  expect(onSubmit).toHaveBeenCalledWith("");
 });
