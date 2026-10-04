@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useLayoutEffect } from "react";
 import type { TreeSnapshot } from "../../lib/cmux-rpc";
 import { FakeWebSocket } from "../../test/fake-websocket";
 import { useCmux } from "../useCmux";
@@ -114,6 +115,23 @@ describe("useCmux", () => {
     expect(result.current.bridgeStatus).toBe("connected");
     expect(result.current.cmuxStatus).toBe("connected");
     expect(result.current.capabilities).toContain("terminal.viewport.v1");
+  });
+
+  it("keeps a newer cmux connected state when an earlier connecting effect is still pending", async () => {
+    const { result } = renderHook(() => {
+      const api = useCmux();
+      useLayoutEffect(() => {
+        const socket = FakeWebSocket.instances[0];
+        if (api.bridgeStatus === "connecting" && socket?.readyState === FakeWebSocket.CONNECTING) {
+          socket.open();
+          socket.receive('{"type":"state","cmux":"connected"}');
+        }
+      }, [api.bridgeStatus]);
+      return api;
+    });
+    await waitFor(() => expect(result.current.bridgeStatus).toBe("connected"));
+    expect(result.current.isConnectionCurrent(result.current.connectionGeneration)).toBe(true);
+    expect(result.current.cmuxStatus).toBe("connected");
   });
 
   it("rejects pending RPCs when the bridge disconnects", async () => {

@@ -23,7 +23,6 @@ Rows are historical and are never deleted when work ships or is removed.
 | Login startup and bounded process retries | Start the bridge in the Mac user session and retry up to three failed exits. | [Spec](specs/2026-09-16-login-autostart-design.md) | 2026-09-16 | — | — | — |
 | Milestone 3 — Agent dashboard | Enrich live surfaces with activity, previews, notifications, and conservative Codex/Claude lifecycle state. Reassigned from Milestone 2 on 2026-10-04. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
 | Browser awareness — original Milestone 3 scope | Historical metadata-only direction; the user-confirmed Milestone 2 preview direction now includes browser discovery. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
-
 | Milestone 2 — Mobile terminal usability | Configurable keys and saved commands, toolbar favorites, reliable Enter/scrolling, and local font size. | [Spec](specs/2026-10-04-mobile-terminal-usability-design.md) | 2026-10-04 | — | — | — |
 | Milestone 2 — Browser screenshots | Read-only exact-panel captures with Refresh and local zoom/pan. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
 | Milestone 2 — Native Markdown/image previews | Read-only content from already-open native panels; blocked by the installed cmux content-read contract. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |

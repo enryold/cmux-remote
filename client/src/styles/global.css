@@ -419,3 +419,11 @@ button {
     margin: 0 auto;
   }
 }
+.shortcut-submission-warning {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px;
+  background: #3a2020;
+  color: #fff;
+}

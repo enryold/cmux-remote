@@ -34,7 +34,9 @@ The old agent dashboard moves to Milestone 3. Content previews have a separate
 The terminal controls retain the prompt composer and expose one **Shortcuts** button. It opens an
 accessible sheet with two kinds of entries: **Key combination** and **Command**. The same sheet
 allows invocation, choosing toolbar favorites, adding a command, editing its name/text, and deleting
-it. Invoking a shortcut closes the sheet and targets the terminal that was selected at invocation.
+it. Invoking a shortcut targets the terminal that was selected at invocation and closes the sheet
+after success. An unconfirmed command keeps the sheet open with a visible warning inside it,
+so the user can inspect the terminal before choosing whether to retry.
 Editing preferences never sends terminal input. Invocation is disabled while disconnected, but
 the menu and preference editing remain usable.
 

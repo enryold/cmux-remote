@@ -304,8 +304,11 @@ export function useCmux(
   );
 
   useEffect(() => {
-    if (bridgeStatus !== "connected" || connectionGeneration !== connectionRef.current.generation) {
-      setCmuxStatus("disconnected");
+    // A socket event can arrive before this render's passive effect. Never let
+    // an older connecting/disconnected render overwrite the newer connection.
+    if (connectionGeneration !== connectionRef.current.generation
+      || (bridgeStatus === "connected") !== connectionRef.current.bridge) return;
+    if (bridgeStatus !== "connected") {
       setCapabilities([]);
       for (const pending of pendingRef.current.values()) {
         clearTimeout(pending.timer);

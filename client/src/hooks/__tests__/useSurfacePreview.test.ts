@@ -63,3 +63,19 @@ it("clears a previous capture for a new connection generation", async () => {
   await act(async () => { complete(response()); });
   await waitFor(() => expect(result.current.status).toBe("ready"));
 });
+
+it("clears captured bytes and discards late refresh when the panel type changes", async () => {
+  let complete!: (response: Response) => void;
+  const request = vi.fn().mockResolvedValueOnce(response())
+    .mockImplementationOnce(() => new Promise<Response>((resolve) => { complete = resolve; }))
+    .mockResolvedValueOnce(new Response("", { status: 422 }));
+  vi.stubGlobal("fetch", request);
+  const { result, rerender } = renderHook(({ surfaceType }) => useSurfacePreview({ surfaceId: imagePreview.surfaceId, surfaceType, enabled: true, onUnauthorized: vi.fn() }), { initialProps: { surfaceType: "browser" } });
+  await waitFor(() => expect(result.current.status).toBe("ready"));
+  act(() => result.current.refresh());
+  rerender({ surfaceType: "filepreview" });
+  expect(result.current.preview).toBeNull();
+  await act(async () => { complete(response()); });
+  await waitFor(() => expect(result.current.status).toBe("unsupported"));
+  expect(result.current.preview).toBeNull();
+});

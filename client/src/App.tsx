@@ -74,7 +74,7 @@ function CommandCenter({
     surfaceId: selected?.type === "terminal" ? selectedId : null,
     readText: cmux.readText,
   });
-  const preview = useSurfacePreview({ surfaceId: selected?.type !== "terminal" ? selectedId : null, enabled: terminalConnected && selected !== undefined && selected.type !== "terminal", onUnauthorized: expire, generation: cmux.connectionGeneration });
+  const preview = useSurfacePreview({ surfaceType: selected?.type ?? null, surfaceId: selected?.type !== "terminal" ? selectedId : null, enabled: terminalConnected && selected !== undefined && selected.type !== "terminal", onUnauthorized: expire, generation: cmux.connectionGeneration });
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {

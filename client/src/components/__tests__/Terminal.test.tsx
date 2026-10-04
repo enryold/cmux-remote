@@ -7,12 +7,13 @@ import { useTerminalPreferences } from "../../hooks/useTerminalPreferences";
 const fake = vi.hoisted(() => ({ instances: [] as Array<{
   options: { fontSize: number }; writes: Array<{ text: string; done: () => void }>;
   selection: boolean; selectionChanged: () => void; dispose: ReturnType<typeof vi.fn>;
+  resized: (size: { cols: number; rows: number }) => void;
 }> }));
 vi.mock("@xterm/xterm", () => ({ Terminal: class {
-  options; writes: Array<{ text: string; done: () => void }> = []; selection = false; selectionChanged = () => {};
+  options; writes: Array<{ text: string; done: () => void }> = []; selection = false; selectionChanged = () => {}; resized = (_size: { cols: number; rows: number }) => {};
   buffer = { active: { baseY: 0, viewportY: 0, length: 0, getLine: () => undefined } }; rows = 24;
   constructor(options: { fontSize: number }) { this.options = options; fake.instances.push(this); }
-  loadAddon() {} open() {} onData() {} onResize() {} onScroll() {} reset() {} focus() {} scrollToBottom() {} scrollToLine() {}
+  loadAddon() {} open() {} onData() {} onResize(callback: (size: { cols: number; rows: number }) => void) { this.resized = callback; } onScroll() {} reset() {} focus() {} scrollToBottom() {} scrollToLine() {}
   hasSelection() { return this.selection; }
   onSelectionChange(callback: () => void) { this.selectionChanged = callback; }
   write(text: string, done: () => void) { this.writes.push({ text, done }); }
@@ -20,10 +21,10 @@ vi.mock("@xterm/xterm", () => ({ Terminal: class {
 } }));
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }));
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
-afterEach(() => { cleanup(); fake.instances = []; localStorage.clear(); });
-function Screen({ content }: { content: string }) {
-  return <Terminal surfaceId="original" content={content} stale={false} viewportEnabled={false} connected settings={useTerminalPreferences()}
-    onInput={vi.fn()} onKey={vi.fn()} onSubmit={vi.fn()} onViewport={vi.fn()} onViewportClear={vi.fn()} />;
+afterEach(() => { cleanup(); fake.instances = []; localStorage.clear(); vi.useRealTimers(); });
+function Screen({ content, viewportEnabled = false, onViewport = vi.fn(), onViewportClear = vi.fn() }: { content: string; viewportEnabled?: boolean; onViewport?: (columns: number, rows: number, generation: number) => void; onViewportClear?: (generation: number) => void }) {
+  return <Terminal surfaceId="original" content={content} stale={false} viewportEnabled={viewportEnabled} connected settings={useTerminalPreferences()}
+    onInput={vi.fn()} onKey={vi.fn()} onSubmit={vi.fn()} onViewport={onViewport} onViewportClear={onViewportClear} />;
 }
 it("serializes xterm writes and retains only the latest waiting snapshot", () => {
   const { rerender } = render(<Screen content="one" />);
@@ -62,4 +63,21 @@ it("defers snapshots through touch gestures and selection", () => {
   terminal.selection = false;
   act(() => terminal.selectionChanged());
   expect(terminal.writes.map((item) => item.text)).toEqual(["one", "two"]);
+});
+
+it("clears the prior Mac viewport when fitted dimensions fall outside the RPC bounds", () => {
+  vi.useFakeTimers();
+  const report = vi.fn(); const clear = vi.fn();
+  render(<Screen content="" viewportEnabled onViewport={report} onViewportClear={clear} />);
+  const terminal = fake.instances[0]; if (!terminal) throw new Error("missing terminal");
+  act(() => { terminal.resized({ cols: 80, rows: 24 }); vi.advanceTimersByTime(100); });
+  expect(report).toHaveBeenLastCalledWith(80, 24, 1);
+  act(() => { terminal.resized({ cols: 10, rows: 4 }); vi.advanceTimersByTime(100); });
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(clear).toHaveBeenLastCalledWith(2);
+  act(() => { terminal.resized({ cols: 300, rows: 120 }); vi.advanceTimersByTime(100); });
+  expect(report).toHaveBeenLastCalledWith(300, 120, 3);
+  act(() => { terminal.resized({ cols: 301, rows: 121 }); vi.advanceTimersByTime(100); });
+  expect(report).toHaveBeenCalledTimes(2);
+  expect(clear).toHaveBeenLastCalledWith(4);
 });

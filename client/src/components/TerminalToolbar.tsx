@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { useTerminalPreferences } from "../hooks/useTerminalPreferences";
 import type { AllowedKey } from "../lib/cmux-rpc";
-import type { SubmitResult } from "../lib/terminal-input";
+import { submissionError, type SubmitResult } from "../lib/terminal-input";
 import { KEY_SHORTCUTS, shortcutId, type ShortcutRef } from "../lib/terminal-preferences";
 import { ShortcutMenu } from "./ShortcutMenu";
 
@@ -16,6 +16,7 @@ export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [commandError, setCommandError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const composing = useRef(false);
   const menuButton = useRef<HTMLButtonElement>(null);
@@ -30,8 +31,12 @@ export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest
     if (shortcut.kind === "key") { onKey(shortcut.key); setMenuOpen(false); return; }
     const command = settings.preferences.commands.find((item) => item.id === shortcut.commandId);
     if (!command) return;
-    inFlight.current = true; setSubmitting(true);
-    try { if (await onSubmit(command.text) === "accepted") setMenuOpen(false); }
+    inFlight.current = true; setSubmitting(true); setCommandError(null);
+    try {
+      const result = await onSubmit(command.text);
+      setCommandError(submissionError(result, command.text));
+      if (result === "accepted") setMenuOpen(false);
+    }
     finally { inFlight.current = false; setSubmitting(false); }
   };
   return (
@@ -55,7 +60,7 @@ export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest
           return label ? <button type="button" key={shortcutId(shortcut)} disabled={!connected || submitting} aria-label={label} onClick={() => void invoke(shortcut)}>{label}</button> : null;
         })}
       </nav>
-      {menuOpen ? <ShortcutMenu settings={settings} connected={connected} busy={submitting} returnFocus={menuButton.current} onInvoke={(shortcut) => void invoke(shortcut)} onClose={() => setMenuOpen(false)} /> : null}
+      {menuOpen ? <ShortcutMenu settings={settings} connected={connected} busy={submitting} submissionWarning={commandError} returnFocus={menuButton.current} onInvoke={(shortcut) => void invoke(shortcut)} onClose={() => setMenuOpen(false)} /> : null}
     </div>
   );
 }

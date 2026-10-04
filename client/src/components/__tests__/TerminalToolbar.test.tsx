@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TerminalToolbar } from "../TerminalToolbar";
@@ -77,4 +78,16 @@ it("sends empty Return once and keeps composing Return local", async () => {
   fireEvent.submit(input.closest("form") as HTMLFormElement);
   await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
   expect(onSubmit).toHaveBeenCalledWith("");
+});
+
+it("shows an unconfirmed saved-command Enter inside the open shortcuts dialog", async () => {
+  const onSubmit = vi.fn().mockResolvedValue("enter_unconfirmed");
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} />);
+  fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Shortcut name" }), { target: { value: "Launch" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Command" }), { target: { value: "launcher" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save command" }));
+  fireEvent.click(screen.getByRole("button", { name: "Launch" }));
+  await waitFor(() => expect(within(screen.getByRole("dialog", { name: "Shortcuts" })).getByRole("alert").textContent).toMatch(/Enter was not confirmed/));
+  expect(onSubmit).toHaveBeenCalledOnce();
 });

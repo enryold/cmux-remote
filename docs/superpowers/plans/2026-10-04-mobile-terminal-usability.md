@@ -197,7 +197,8 @@ with explicit touch/selection state. The Latest control calls `term.scrollToBott
   Add native touch handling only if the reproduction establishes the missing behavior. Do not change
   global gesture behavior or replace xterm/polling.
 - [x] Run `devenv shell -- bun run --cwd client test src/lib/__tests__/terminal.test.ts` and repeat
-  terminal E2E in both configured projects. Repeat the original real-phone reproduction.
+  terminal E2E in both configured projects.
+- [ ] Repeat the original real-phone reproduction (hardware acceptance remains pending).
 - [x] Inspect the scoped diff and commit the verified scroll behavior with accurate README wording.
 
 ## Task 6: Add font controls and complete terminal acceptance
@@ -210,18 +211,18 @@ after its actual merge/live conditions are met.
 `setFontSize`; Terminal updates `term.options.fontSize`, refits, and retains current generation-based
 `onViewport` / `onViewportClear` semantics. Do not remount Terminal for a font change.
 
-- [ ] Write tests for 10/13/24 px, integer steps, persisted settings after reload/terminal switching,
+- [x] Write tests for 10/13/24 px, integer steps, persisted settings after reload/terminal switching,
   stable xterm instance, selection/scroll anchoring, and valid viewport dimensions after reflow.
-- [ ] Add E2E flows that create a launcher shortcut, choose Shift+Left, operate an inert menu fixture,
+- [x] Add E2E flows that create a launcher shortcut, choose Shift+Left, operate an inert menu fixture,
   use Return, change font, background/reconnect, and observe no repeated input. Include viewport cleanup.
-- [ ] Run focused client tests and `devenv shell -- bun run e2e -- e2e/terminal.spec.ts e2e/reconnect.spec.ts`;
+- [x] Run focused client tests and `devenv shell -- bun run e2e -- e2e/terminal.spec.ts e2e/reconnect.spec.ts`;
   confirm new font behavior fails before implementing the controls.
-- [ ] Implement A−/size/A+, preference wiring, fit scheduling, and cleanup without global Mac font changes.
-- [ ] Repeat focused checks, then run `devenv shell -- check` once; require lint, tests, typechecks,
+- [x] Implement A−/size/A+, preference wiring, fit scheduling, and cleanup without global Mac font changes.
+- [x] Repeat focused checks, then run `devenv shell -- check` once; require lint, tests, typechecks,
   build, Chromium E2E, and iPhone WebKit E2E pass. Inspect the entire implementation diff.
 - [ ] Run the spec's real-device checklist, including the actual Codex Shift+Left question menu and
   Claude Code prompts. Record verified outcomes and remaining failures; no automated test proves Live.
-- [ ] Commit the tested terminal deliverable. Leave native content dependencies to the separate
+- [x] Commit the tested terminal deliverable. Leave native content dependencies to the separate
   [preview plan](2026-10-04-surface-content-previews.md).
 
 ## Handoff
@@ -232,3 +233,8 @@ request a fresh whole-branch review of input ordering and boundary changes befor
 If subagent execution is selected, use the repository's explicit model/effort routing and verify
 the current available model names before dispatch. Do not interpret this plan as an instruction to
 start implementation or to deploy the bridge.
+
+## Execution record — 2026-10-04
+
+See [validation and remaining acceptance](2026-10-04-v2-mobile-validation.md) for test counts,
+real cmux evidence, final review fixes, execution decisions, and the native-provider blocker.

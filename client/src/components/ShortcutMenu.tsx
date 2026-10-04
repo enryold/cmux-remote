@@ -9,8 +9,9 @@ interface ShortcutMenuProps {
   onInvoke(shortcut: ShortcutRef): void;
   onClose(): void;
   returnFocus: HTMLElement | null;
+  submissionWarning?: string | null;
 }
-export function ShortcutMenu({ settings, connected, busy, onInvoke, onClose, returnFocus }: ShortcutMenuProps) {
+export function ShortcutMenu({ settings, connected, busy, onInvoke, onClose, returnFocus, submissionWarning }: ShortcutMenuProps) {
   const { preferences, persistenceError } = settings;
   const [editingId, setEditingId] = useState<string | undefined>();
   const [label, setLabel] = useState("");
@@ -40,6 +41,7 @@ export function ShortcutMenu({ settings, connected, busy, onInvoke, onClose, ret
           else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
         }}>
         <div className="shortcut-heading"><h2>Shortcuts</h2><button type="button" aria-label="Close shortcuts" onClick={onClose}>Close</button></div>
+        {submissionWarning ? <p role="alert" className="shortcut-submission-warning">{submissionWarning}</p> : null}
         <p>Choose ★ to show a shortcut in the toolbar. Commands run in this terminal.</p>
         <fieldset className="font-controls" aria-label="Terminal font size">
           <button type="button" aria-label="Decrease font" disabled={preferences.fontSize <= 10} onClick={() => settings.setFontSize(preferences.fontSize - 1)}>A−</button>

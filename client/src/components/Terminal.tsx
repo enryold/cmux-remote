@@ -161,7 +161,9 @@ export function Terminal(props: TerminalProps) {
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         generation += 1;
-        callbacksRef.current.onViewport(cols, rows, generation);
+        if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 300 || rows < 5 || rows > 120) {
+          callbacksRef.current.onViewportClear(generation);
+        } else callbacksRef.current.onViewport(cols, rows, generation);
       }, 100);
     });
 

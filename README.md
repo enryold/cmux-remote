@@ -312,6 +312,7 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Milestone 2 terminal usability plan](docs/superpowers/plans/2026-10-04-mobile-terminal-usability.md)
 - [Read-only content preview design and compatibility gate](docs/superpowers/specs/2026-10-04-surface-content-previews-design.md)
 - [Read-only content preview implementation](docs/superpowers/plans/2026-10-04-surface-content-previews.md)
+- [Milestone 2 validation and remaining acceptance](docs/superpowers/plans/2026-10-04-v2-mobile-validation.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
 - [Engineering guide for Codex and other coding agents](AGENTS.md)
 - [Claude Code entry point](CLAUDE.md)

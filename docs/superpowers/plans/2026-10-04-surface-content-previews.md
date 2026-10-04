@@ -191,13 +191,13 @@ the content associated with `{workspaceId, surfaceId}` through its verified reso
 **Files:** tests/fixes within this plan's owned units; README real-device checklist and roadmap
 lifecycle only when the applicable events actually occur.
 
-- [ ] Run `devenv shell -- check`; require lint, unit/integration tests, typechecks, build, and
+- [x] Run `devenv shell -- check`; require lint, unit/integration tests, typechecks, build, and
   Chromium/iPhone WebKit E2E pass. Inspect the whole diff, including auth placement and cache policy.
-- [ ] Request a fresh whole-branch review focused on capability/Origin checks, target binding,
+- [x] Request a fresh whole-branch review focused on capability/Origin checks, target binding,
   byte/queue bounds, private response fields, late content, and isolation from terminal input.
 - [ ] On disposable Mac/iPhone surfaces, verify the spec's browser checklist and existing terminal
   discovery/input/reconnect. Verify native panels as well only after Task 4 succeeds.
-- [ ] Record partial acceptance accurately. Browser screenshots can pass independently; the full
+- [x] Record partial acceptance accurately. Browser screenshots can pass independently; the full
   Markdown/image/browser viewing request cannot be declared complete while Task 4 is blocked.
 - [ ] Commit verified changes; set Developed after merge and Live only after the applicable real
   Mac/iPhone checks. Do not deploy or mark lifecycle dates merely because this plan was written.
@@ -208,3 +208,8 @@ Review the spec, the installed native-handler blocker, and this plan before exec
 terminal usability first. Native execution with one independent security-focused branch review is
 recommended for browser Tasks 1–3; decide how to resolve the native cmux dependency separately.
 This plan does not authorize browser control, filesystem access, or a cmux fork.
+
+## Execution record — 2026-10-04
+
+See [validation and remaining acceptance](2026-10-04-v2-mobile-validation.md) for test counts,
+real cmux evidence, final review fixes, execution decisions, and the native-provider blocker.

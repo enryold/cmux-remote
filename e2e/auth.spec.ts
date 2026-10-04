@@ -17,7 +17,7 @@ test("pairs once on iPhone and keeps the session after reload", async (
   await page.getByRole("button", { name: "Pair" }).click();
   await expect(page.getByRole("button", { name: "API Agent" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New terminal" })).toBeVisible();
-  await expect(page.locator(".terminal-row")).toHaveCount(9);
+  await expect(page.locator(".terminal-row")).toHaveCount(13);
 
   await page.reload();
   await expect(page.getByRole("button", { name: "API Agent" })).toBeVisible();
