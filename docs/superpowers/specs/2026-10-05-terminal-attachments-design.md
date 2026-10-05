@@ -3,6 +3,9 @@
 Approved on 2026-10-05: select files or photos from the phone, upload them to the Mac,
 and add their references to the selected terminal's prompt before explicit Send.
 
+**Status:** implemented and integrated into the primary branch `master` on 2026-10-05;
+full repository check passed; hardware iPhone acceptance remains pending.
+
 ## Scope and flow
 
 The existing composer gains an accessible attachment button using the native file picker.
