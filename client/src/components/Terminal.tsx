@@ -21,6 +21,8 @@ interface TerminalProps {
   onInput(input: TerminalInput): void;
   onKey(key: AllowedKey): void;
   onSubmit(text: string): Promise<SubmitResult>;
+  connectionGeneration?: number;
+  onUpload?(file: File, signal: AbortSignal): Promise<string>;
   onViewport(columns: number, rows: number, generation: number): void;
   onViewportClear(generation: number): void;
 }
@@ -228,6 +230,8 @@ export function Terminal(props: TerminalProps) {
         settings={props.settings}
         onKey={sendKey}
         onSubmit={props.onSubmit}
+        connectionGeneration={props.connectionGeneration}
+        onUpload={props.onUpload}
         onLatest={() => termRef.current?.scrollToBottom()}
       />
     </main>

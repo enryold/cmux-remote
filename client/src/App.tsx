@@ -11,6 +11,7 @@ import { useCmux } from "./hooks/useCmux";
 import { useTerminalPolling } from "./hooks/useTerminalPolling";
 import { useTerminalPreferences } from "./hooks/useTerminalPreferences";
 import type { ConnectionStatus } from "./lib/cmux-rpc";
+import { uploadAttachment } from "./lib/attachments";
 import { createTerminalInputDispatcher, submissionError, type TerminalInput } from "./lib/terminal-input";
 import {
   previewSurfaceWorkspaces,
@@ -164,6 +165,17 @@ function CommandCenter({
             onInput={(input) => void sendInput(input)}
             onKey={(key) => void sendInput({ kind: "key", key })}
             onSubmit={submitPrompt}
+            connectionGeneration={generation}
+            onUpload={async (file, signal) => {
+              const revision = selectionRef.current.revision;
+              const current = () => !signal.aborted && selectionRef.current.id === selectedId
+                && selectionRef.current.revision === revision && selectedTypeRef.current === "terminal"
+                && apiRef.current.isConnectionCurrent(generation);
+              if (!current()) throw new Error("Upload interrupted. Your prompt was kept.");
+              const path = await uploadAttachment(selectedId, file, signal, expire);
+              if (!current()) throw new Error("Upload interrupted. Your prompt was kept.");
+              return path;
+            }}
             onViewport={(columns, rows, generation) => {
               void cmux
                 .reportViewport(selectedId, columns, rows, generation)

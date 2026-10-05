@@ -13,8 +13,10 @@ import { TerminalToolbar } from "../TerminalToolbar";
 import { useTerminalPreferences } from "../../hooks/useTerminalPreferences";
 
 afterEach(() => { cleanup(); localStorage.clear(); });
-function Toolbar(props: Pick<Parameters<typeof TerminalToolbar>[0], "onKey" | "onSubmit">) {
-  return <TerminalToolbar {...props} connected settings={useTerminalPreferences()} />;
+function Toolbar({ connected = true, ...props }: Pick<Parameters<typeof TerminalToolbar>[0], "onKey" | "onSubmit"> & {
+  connected?: boolean; connectionGeneration?: number; onUpload?(file: File, signal: AbortSignal): Promise<string>;
+}) {
+  return <TerminalToolbar {...props} connected={connected} settings={useTerminalPreferences()} />;
 }
 
 it("maps every named key to the exact cmux key", () => {
@@ -90,4 +92,68 @@ it("shows an unconfirmed saved-command Enter inside the open shortcuts dialog", 
   fireEvent.click(screen.getByRole("button", { name: "Launch" }));
   await waitFor(() => expect(within(screen.getByRole("dialog", { name: "Shortcuts" })).getByRole("alert").textContent).toMatch(/Enter was not confirmed/));
   expect(onSubmit).toHaveBeenCalledOnce();
+});
+
+it("attaches files sequentially, preserves typing and quotes paths without submitting", async () => {
+  let finish!: (path: string) => void;
+  const onUpload = vi.fn().mockImplementationOnce(() => new Promise<string>((resolve) => { finish = resolve; }))
+    .mockResolvedValueOnce("/tmp/photo.png");
+  const onSubmit = vi.fn().mockResolvedValue("accepted");
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} onUpload={onUpload} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  fireEvent.change(input, { target: { value: "Inspect" } });
+  fireEvent.change(screen.getByLabelText("Files and images"), { target: {
+    files: [new File(["document"], "notes.txt"), new File(["image"], "photo.png", { type: "image/png" })],
+  } });
+  await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(1));
+  expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(input, { target: { value: "Inspect both" } });
+  finish("/tmp/it's notes.txt");
+  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Inspect both '/tmp/it'\\''s notes.txt' '/tmp/photo.png'"));
+  expect(onUpload).toHaveBeenCalledTimes(2);
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("Inspect both '/tmp/it'\\''s notes.txt' '/tmp/photo.png'"));
+});
+
+it("retains the prompt on failed or oversized uploads and allows choosing the same file again", async () => {
+  const onUpload = vi.fn().mockRejectedValueOnce(new Error("Upload failed.")).mockResolvedValue("/tmp/notes.txt");
+  render(<Toolbar onKey={vi.fn()} onSubmit={vi.fn()} onUpload={onUpload} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  const picker = screen.getByLabelText("Files and images");
+  fireEvent.change(input, { target: { value: "Keep this" } });
+  const file = new File(["notes"], "notes.txt");
+  fireEvent.change(picker, { target: { files: [file] } });
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Upload failed/));
+  expect((input as HTMLInputElement).value).toBe("Keep this");
+  const tooBig = new File(["x"], "large.bin");
+  Object.defineProperty(tooBig, "size", { value: 10 * 1024 * 1024 + 1 });
+  fireEvent.change(picker, { target: { files: [tooBig] } });
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/10 MiB/));
+  expect(onUpload).toHaveBeenCalledTimes(1);
+  fireEvent.change(picker, { target: { files: Array(5).fill(file) } });
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/four files/));
+  expect(onUpload).toHaveBeenCalledTimes(1);
+  fireEvent.change(picker, { target: { files: [file] } });
+  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Keep this '/tmp/notes.txt'"));
+});
+
+it("aborts on reconnect or departure and ignores late upload responses", async () => {
+  let finish!: (path: string) => void;
+  const onUpload = vi.fn((_file: File, _signal: AbortSignal) => new Promise<string>((resolve) => { finish = resolve; }));
+  const props = { onKey: vi.fn(), onSubmit: vi.fn(), onUpload, connectionGeneration: 1 };
+  const { rerender, unmount } = render(<Toolbar {...props} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  fireEvent.change(input, { target: { value: "Keep" } });
+  fireEvent.change(screen.getByLabelText("Files and images"), { target: { files: [new File(["x"], "x.txt")] } });
+  await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(1));
+  const signal = onUpload.mock.calls[0]?.[1];
+  rerender(<Toolbar {...props} connectionGeneration={2} />);
+  expect(signal?.aborted).toBe(true);
+  finish("/tmp/late.txt");
+  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Keep"));
+  fireEvent.change(screen.getByLabelText("Files and images"), { target: { files: [new File(["x"], "x.txt")] } });
+  await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(2));
+  unmount();
+  expect(onUpload.mock.calls[1]?.[1].aborted).toBe(true);
 });

@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { PREVIEW_IMAGE } from "./preview-image";
 
@@ -14,6 +14,7 @@ export interface FakeCmuxControl {
   socketPath: string;
   calls: Array<{ method: string; surfaceId: unknown; workspaceId: unknown }>;
   configurePreview(action: "reset" | "fail" | "close"): void;
+  configureUploads(fail: boolean): void;
   close(): Promise<void>;
 }
 
@@ -50,6 +51,8 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   let browserFailure = false;
   let eventSequence = 0;
   const questions = new Map<string, number>();
+  const uploads = new Map<string, { operation: string; name: string; total: number; received: number }>();
+  let uploadFailure = false;
 
   const tree = () => ({
     windows: [
@@ -204,6 +207,26 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
       reply(socket, request.id, tree());
       return;
     }
+    if (request.method === "mobile.task.attachment.upload") {
+      if (uploadFailure) { fail(socket, request.id, "internal_error"); return; }
+      const p = request.params;
+      if (typeof p.upload_id !== "string" || typeof p.operation_id !== "string" || typeof p.file_name !== "string"
+        || !Number.isSafeInteger(p.total_bytes) || Number(p.total_bytes) < 0 || Number(p.total_bytes) > 32 * 1024 * 1024
+        || typeof p.data_b64 !== "string" || typeof p.last !== "boolean") {
+        fail(socket, request.id, "invalid_params"); return;
+      }
+      const value = uploads.get(p.upload_id) ?? { operation: p.operation_id, name: p.file_name, total: Number(p.total_bytes), received: 0 };
+      const chunk = Buffer.from(p.data_b64, "base64");
+      if (chunk.toString("base64") !== p.data_b64 || chunk.length > 3 * 1024 * 1024 || p.offset !== value.received
+        || value.operation !== p.operation_id || value.name !== p.file_name || value.total !== p.total_bytes
+        || value.received + chunk.length > value.total || (p.last && value.received + chunk.length !== value.total)) {
+        fail(socket, request.id, "invalid_params"); return;
+      }
+      value.received += chunk.length; uploads.set(p.upload_id, value);
+      reply(socket, request.id, { received_bytes: value.received,
+        ...(p.last ? { path: join(homedir(), ".cache/cmux/task-attachments", value.operation, value.name) } : {}) });
+      return;
+    }
     if (request.method === "browser.screenshot") {
       if (!browserVisible || request.params.surface_id !== "dddddddd-dddd-4ddd-8ddd-dddddddddddd" || request.params.workspace_id !== "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa") fail(socket, request.id, "surface_not_found");
       else if (browserFailure) fail(socket, request.id, "internal_error");
@@ -321,6 +344,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   return {
     socketPath,
     calls,
+    configureUploads(fail) { uploadFailure = fail; },
     configurePreview(action) {
       if (action === "reset") { browserVisible = true; browserFailure = false; calls.length = 0; }
       else if (action === "fail") browserFailure = true;

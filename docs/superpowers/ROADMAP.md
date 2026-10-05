@@ -26,6 +26,7 @@ Rows are historical and are never deleted when work ships or is removed.
 | Milestone 2 — Mobile terminal usability | Configurable keys and saved commands, toolbar favorites, reliable Enter/scrolling, and local font size. | [Spec](specs/2026-10-04-mobile-terminal-usability-design.md) | 2026-10-04 | 2026-10-04 | — | — |
 | Milestone 2 — Browser screenshots | Read-only exact-panel captures with Refresh and local zoom/pan. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | 2026-10-04 | — | — |
 | Milestone 2 — Native Markdown/image previews | Read-only content from already-open native panels; blocked by the installed cmux content-read contract. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
+| Terminal file/image attachments | Upload phone files and photos to the Mac and review their references in the selected terminal composer before Send. | [Spec](specs/2026-10-05-terminal-attachments-design.md) | 2026-10-05 | — | — | — |
 
 ## Version reassignment — 2026-10-04
 

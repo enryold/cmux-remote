@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
+import { ATTACHMENT_BYTES, createAttachmentRoutes } from "./attachment-routes";
 import {
   createAuthRoutes,
   createPairingChallenge,
@@ -40,6 +41,8 @@ export function startServer(config: RuntimeConfig): RunningServer {
   app.route("/", createAuthRoutes(config, pairingChallenge));
   const previewService = createPreviewService(config);
   app.route("/", createPreviewRoutes(config, previewService));
+  const attachments = createAttachmentRoutes(config);
+  app.route("/", attachments.routes);
   app.use("/*", serveStatic({ root: clientDistPath }));
 
   const eventStream = new CmuxEventStream({
@@ -51,6 +54,7 @@ export function startServer(config: RuntimeConfig): RunningServer {
   const server = Bun.serve({
     hostname: config.hostname,
     port: config.port,
+    maxRequestBodySize: ATTACHMENT_BYTES,
     fetch(request, bunServer) {
       if (new URL(request.url).pathname === "/ws") {
         if (
@@ -81,6 +85,7 @@ export function startServer(config: RuntimeConfig): RunningServer {
     async stop(closeActiveConnections) {
       eventStream.stop();
       previewService.close();
+      attachments.close();
       await server.stop(closeActiveConnections);
     },
   };

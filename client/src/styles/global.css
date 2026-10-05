@@ -239,6 +239,14 @@ button {
   background: #171b24;
 }
 
+.attachment-notice {
+  margin: 0;
+  padding: 5px 10px;
+  color: #b9dcff;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .terminal-composer {
   display: flex;
   gap: 6px;

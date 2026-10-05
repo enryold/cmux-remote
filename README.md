@@ -1,21 +1,40 @@
 # cmux-remote
 
-An open-source, mobile-first command center for terminal surfaces running in
-[cmux](https://cmux.dev). It keeps cmux as the primary workspace and gives an iPhone a focused way
-to discover terminals, read recent output, type, and recover after network or background changes.
+**Your cmux terminals, from your iPhone.**
 
-```text
-iPhone Safari / PWA
-        | Tailscale device capability + paired session
-        v
-Bun/Hono bridge on the Mac
-        | validated RPC whitelist over a Unix socket
-        v
-cmux
-```
+Leave a command, build, or coding assistant running in [cmux](https://cmux.dev) on your Mac.
+Open cmux-remote on your iPhone to see its output, switch between terminals, and reply when
+something needs your attention. You can type a prompt, press a shortcut, or attach a photo or
+document, while your work keeps running on the Mac.
 
-There is no required cloud service. This is not a web IDE, generic SSH endpoint, file manager, Git
-client, or remote browser.
+Use it in Safari or add it to your Home Screen like an app. Your phone connects privately to
+your Mac through Tailscale; no cloud relay is required. The Mac must stay awake with cmux and
+the bridge running.
+
+## What this fork improves
+
+This fork builds on [hummer98/cmux-remote](https://github.com/hummer98/cmux-remote), the original
+lightweight mobile terminal viewer. It adds practical controls, connection recovery, and a guided
+private setup:
+
+- **Find the right terminal.** Browse live workspaces and their panels in one dashboard, then
+  open the exact terminal you need, even when a workspace has several panes.
+- **Reply comfortably.** Use a visible prompt box, reliable Enter handling, special keys,
+  saved commands, and your own toolbar favorites.
+- **Read on a small screen.** Scroll through output, select and copy text, and adjust the font
+  size without resizing the terminal on your Mac.
+- **Attach files and photos.** Upload them to the Mac, review their references in your prompt,
+  and send when ready. Attaching a file alone never submits a command.
+- **Check browser panels.** View a screenshot of an open cmux browser panel, refresh it, and
+  zoom or pan on your phone.
+- **Recover after interruptions.** Connections recover automatically and output refreshes when
+  you return to the app. Terminal input is never automatically replayed after reconnecting.
+- **Set up private access.** The setup wizard walks you through authorizing one iPhone and
+  pairing with a six-digit code. You can also configure the bridge to start when you log in
+  to your Mac.
+
+Browser previews are read-only. Viewing native Markdown and image panels is still blocked by
+the installed cmux API; the latest mobile flows still need final acceptance on a physical iPhone.
 
 ## Getting started
 
@@ -97,6 +116,7 @@ The current build provides Milestone 2 terminal usability and browser previews a
 - xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
   touch gestures scroll terminal history while the header and bottom controls stay in place;
 - direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
+- file and image uploads from the composer, with editable references and explicit Send;
 - a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab), saved commands,
   toolbar favorites, and locally persisted terminal font size;
 - read-only browser screenshots with manual Refresh and local zoom/pan;
@@ -123,10 +143,12 @@ Controlling this app can be equivalent to controlling your Mac shell. The bridge
 - can require a Tailscale app capability granted to one exact device;
 - supports a single-use six-digit pairing code without sending the signing secret to the browser;
 - uses an HttpOnly, SameSite session cookie after login;
-- checks the exact request Origin for login, logout, previews, and WebSocket upgrades;
+- checks the exact request Origin for login, logout, previews, uploads, and WebSocket upgrades;
 - accepts only topology, bounded terminal read/input, named-key, and viewport RPCs;
 - accepts one protected preview POST for an exact current browser surface, with fixed server-owned
   screenshot reads, fresh ownership checks, a 10-second deadline, and one capture in flight;
+- accepts a protected attachment POST for an exact live terminal, limited to 10 MiB per file,
+  one upload in flight and a 120-second deadline; cmux owns storage and destination names;
 - never exposes arbitrary cmux RPC, browser input/navigation, workspace creation, or shell spawning;
 - never caches authentication, API, WebSocket, or terminal responses in the service worker.
 
@@ -251,7 +273,44 @@ devenv shell -- check
 `check` runs lint, unit/integration tests, typechecks, the production build, and deterministic
 Chromium plus iPhone WebKit E2E tests against a fake cmux socket.
 
+## How it works
+
+```text
+iPhone Safari / PWA
+        | Tailscale device capability + paired session
+        v
+Bun/Hono bridge on the Mac
+        | validated RPC whitelist over a Unix socket
+        v
+cmux
+```
+
+cmux remains the primary workspace. The bridge provides focused access to its existing panels;
+it is not a web IDE, generic SSH endpoint, file manager, Git client, or remote browser.
+
 ## Runtime behavior
+
+### Files and images
+
+Open a terminal and tap **📎** beside the prompt to choose photos or files using the phone's
+native picker. Select up to four files at a time, each at most 10 MiB. Uploads run sequentially,
+then quoted Mac file paths appear in the editable prompt. Review them, add your instructions,
+and press **Send**. Uploading alone never types into the terminal or presses Enter.
+
+The running program must support reading local documents/images from those paths. Files stay
+on this Mac; uploading does not transfer them to a program running on another machine.
+Filenames are limited to 180 UTF-8 bytes, without slashes or control characters; leading dots
+are removed. The installed cmux upload contract was verified on 0.64.25 (106). Versions without
+that API show an error instead of falling back to shell commands.
+
+Leaving the terminal, losing the connection, or hiding the app cancels active uploads.
+While the terminal stays open, failures retain the typed prompt and references already added;
+choose the file again to retry.
+cmux stores files under `~/.cache/cmux/task-attachments` and prunes operation directories older
+than seven days during later uploads. Removing a reference or canceling an upload does not
+delete an already stored file. Files and paths are never saved in browser storage or PWA caches.
+
+### Discovery and terminal input
 
 The client loads the complete cmux workspace → pane → surface tree and lists typed surfaces.
 Lifecycle events trigger live rediscovery, with a slow visible-page refresh as fallback. Only the
@@ -294,6 +353,8 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - Shortcuts CRUD, favorites, optional Ctrl-C/Ctrl-D, and disposable Codex/Claude question menus
   using Shift+Left, Shift+Tab, arrows, Escape, and empty Enter;
 - saved launcher commands run once and never replay on reload/reconnect;
+- native photo/file selection, upload progress/failure/cancellation, editable references,
+  and explicit Send to the original terminal;
 - 10–24 px font persistence and history position during output, touch, selection, and font changes;
 - read-only browser capture, Refresh, local zoom/pan, stale failures, closure, and auth expiry;
 - native Markdown/image rows truthfully report unavailable until the provider gate passes;
@@ -314,6 +375,8 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Read-only content preview design and compatibility gate](docs/superpowers/specs/2026-10-04-surface-content-previews-design.md)
 - [Read-only content preview implementation](docs/superpowers/plans/2026-10-04-surface-content-previews.md)
 - [Milestone 2 validation and remaining acceptance](docs/superpowers/plans/2026-10-04-v2-mobile-validation.md)
+- [Terminal attachments design](docs/superpowers/specs/2026-10-05-terminal-attachments-design.md)
+- [Terminal attachments implementation plan](docs/superpowers/plans/2026-10-05-terminal-attachments.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)
 - [Engineering guide for Codex and other coding agents](AGENTS.md)
 - [Claude Code entry point](CLAUDE.md)
