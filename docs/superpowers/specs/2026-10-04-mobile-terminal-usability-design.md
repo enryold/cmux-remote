@@ -148,10 +148,15 @@ without snapping to the newest output. Follow live output only when the reader w
 bottom or explicitly chooses **Latest**. A Latest button remains reachable while browsing history.
 
 Expose A−, the current size, and A+ in the Shortcuts sheet, separate from actions that send input.
-Changing font size updates the existing xterm instance, refits the local grid, and uses the existing
-debounced `terminal.viewport` contract when supported. Preserve the reading anchor and selection as
-far as xterm reflow permits. Do not send invalid grid dimensions or leave a viewport override on
-surface exit, logout, or disconnect. Changing font must not change the font on the Mac globally.
+Changing font size updates the existing xterm instance and refits the local grid. Preserve the
+reading anchor and selection as far as xterm reflow permits. Opening a
+terminal, resizing the phone view, or changing its font must preserve the Mac terminal's dimensions
+and font. Do not automatically send `terminal.viewport` overrides from the mobile view.
+
+**Maintenance correction — 2026-10-05:** automatic native viewport synchronization was disabled
+after the user observed the Mac terminal resizing to the phone's grid. This supersedes the original
+debounced `terminal.viewport` behavior. The bridge retains its validated viewport contract and
+disconnect cleanup for older clients.
 
 ## Boundaries and verification
 
@@ -173,7 +178,7 @@ Real-device acceptance requires all of the following on disposable surfaces:
 - A saved launcher runs once in a shell; reconnect never launches it again.
 - iPhone Return produces one genuine Enter, with and without composer text; IME and paste remain usable.
 - Scroll through output while polling, select/copy, return to Latest, background, and resume.
-- Font changes survive reload and terminal switching and preserve viewport cleanup.
+- Font changes survive reload and terminal switching and preserve the Mac terminal's dimensions.
 
 Do not mark Developed before merge into the repository's primary branch, or Live before Mac and
 iPhone PWA verification. Planning itself proves none of these runtime outcomes.

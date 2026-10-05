@@ -174,7 +174,7 @@ function CommandCenter({
             }}
             stale={polling.error !== null}
             surfaceId={selectedId}
-            viewportEnabled={cmux.capabilities.includes("terminal.viewport.v1")}
+            viewportEnabled={false /* Remote sizing also resizes the Mac surface. */}
           /> : <SurfacePreview key={selectedId} {...preview} />}
         </>
       ) : (

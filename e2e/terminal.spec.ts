@@ -1,6 +1,37 @@
 import { expect, test } from "@playwright/test";
 import { login } from "./helpers";
 
+test("fits the phone locally without resizing the Mac terminal", async ({ page }) => {
+  const viewports: unknown[] = [];
+  let reads = 0;
+  page.on("websocket", (socket) => socket.on("framesent", (frame) => {
+    const message = JSON.parse(String(frame.payload));
+    if (message.method === "terminal.viewport") viewports.push(message.params);
+    if (message.method === "surface.read_text") reads++;
+  }));
+  await page.setViewportSize({ width: 393, height: 852 });
+  await login(page);
+  await page.getByRole("button", { name: "API Agent" }).click();
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("api ready");
+  await page.getByRole("button", { name: "Shortcuts" }).click();
+  await page.getByRole("button", { name: "Increase font" }).click();
+  await page.getByRole("button", { name: "Close shortcuts" }).click();
+  await expect(page.locator(".xterm-rows")).toHaveCSS("font-size", "14px");
+  await page.setViewportSize({ width: 393, height: 647 });
+  await expect.poll(async () => {
+    const container = await page.getByRole("region", { name: "Terminal" }).boundingBox();
+    const screen = await page.locator(".xterm-screen").boundingBox();
+    if (!container || !screen) return Infinity;
+    return screen.y + screen.height - (container.y + container.height);
+  }).toBeLessThanOrEqual(0);
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "API Agent" }).click();
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("api ready");
+  await expect(page.locator(".xterm-rows")).toHaveCSS("font-size", "14px");
+  await expect.poll(() => reads).toBeGreaterThan(4);
+  expect(viewports).toEqual([]);
+});
+
 test("reads, types, sends mobile keys, and switches exact surfaces", async ({ page }) => {
   await login(page);
   await page.getByRole("button", { name: "API Agent" }).click();

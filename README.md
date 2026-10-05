@@ -101,7 +101,7 @@ The current build provides Milestone 2 terminal usability and browser previews a
   toolbar favorites, and locally persisted terminal font size;
 - read-only browser screenshots with manual Refresh and local zoom/pan;
 - adaptive output polling, topology event subscriptions, foreground refresh, and automatic reconnect;
-- coordinated terminal viewport sizing that is cleared when the remote terminal closes;
+- local terminal sizing and font changes that preserve the Mac terminal's dimensions;
 - an installable dark-mode PWA with iPhone safe-area and software-keyboard handling;
 - localhost-only serving, exact-origin checks, a constrained RPC whitelist, and optional one-device
   Tailscale pairing.

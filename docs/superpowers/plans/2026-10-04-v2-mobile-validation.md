@@ -109,3 +109,18 @@ A fresh `devenv shell -- check` passed: lint, 72 client, 56 server, 21 setup, an
 both typechecks, production build, and 25 E2E tests with 1 intentional Chromium pairing skip. The full
 output was inspected. `git diff --check` passed. The existing service was restarted; local and
 configured HTTPS checks report cmux connected and serve the current CSS containing both scroll fixes.
+
+## Mac viewport preservation — 2026-10-05
+
+The user confirmed scrolling from the phone and reported that opening a terminal resized its Mac
+surface to the phone's grid. The regression observed `terminal.viewport` requests on opening,
+changing font/view height, and reopening: 47×44 followed by 43×28. Automatic native viewport
+synchronization is now disabled in the application; xterm still fits the phone locally. The bridge
+keeps its validated viewport contract and cleanup for older clients.
+
+The E2E regression failed before the fix in Chromium and iPhone WebKit, then passed in both. It
+checks local fit, font persistence, and absence of native resize requests across opening, changing
+font/view height, and reopening. A fresh `devenv shell -- check` passed: lint, 72 client, 56 server,
+21 setup, and 3 LaunchAgent tests, both typechecks, production build, and 27 E2E tests with 1
+intentional Chromium pairing skip. The full output was inspected. Hardware acceptance of this
+viewport change remains pending; the roadmap's Live dates remain unchanged.
