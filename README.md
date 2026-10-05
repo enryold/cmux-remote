@@ -44,15 +44,43 @@ iPhone is a six-digit pairing code printed when the bridge starts.
 Prerequisites:
 
 - macOS with cmux running;
-- Tailscale connected to the same tailnet on the Mac and iPhone;
-- [devenv](https://devenv.sh/).
+- Tailscale connected to the same tailnet on the Mac and iPhone, with the `tailscale` CLI
+  available on the Mac.
 
-From the repository root, install the locked dependencies and run the guided setup:
+Clone the repository and open its folder:
+
+```bash
+git clone https://github.com/enryold/cmux-remote.git
+cd cmux-remote
+```
+
+Choose either setup method below. Both use the same guided wizard.
+
+### Install without devenv
+
+Install [Bun](https://bun.sh/docs/installation) and [Node.js 22](https://nodejs.org/en/download),
+and make sure `bun` and `node` are available in your terminal. The project is tested with
+Bun 1.3.13 and Node.js 22.
+
+From the repository root, install the locked dependencies and start setup:
+
+```bash
+bun install --frozen-lockfile
+bun install --cwd client --frozen-lockfile
+bun install --cwd server --frozen-lockfile
+bun setup.js
+```
+
+### Install with devenv
+
+If you use [devenv](https://devenv.sh/), it provides Bun and Node.js for you:
 
 ```bash
 devenv shell -- deps
 devenv shell -- setup
 ```
+
+### Pair your iPhone
 
 The wizard finds the Mac and visible iPhones in the current tailnet, asks you to select or confirm
 one phone, and checks that the HTTPS Serve route is safe to use. Accept the suggested capability by
@@ -68,16 +96,28 @@ On the selected iPhone, open the HTTPS URL printed by the wizard, enter the six-
 by the server, then use Safari's Share → Add to Home Screen. The `*.ts.net` URL remains stable while
 the Mac's Tailscale node name and tailnet DNS suffix remain unchanged.
 
-For later launches, rebuild the PWA and start the configured bridge with:
+### Later launches
+
+With Bun, run these commands from the repository root to rebuild the PWA and start the bridge.
+Bun [automatically loads](https://bun.sh/docs/runtime/environment-variables) the `.env` saved
+by the wizard. Keep this terminal running; Ctrl-C stops the bridge.
+
+```bash
+bun run --cwd client build
+bun run server/src/index.ts
+```
+
+With devenv, the equivalent command is:
 
 ```bash
 devenv shell -- start
 ```
 
-### Start automatically on this Mac
+### Start automatically on this Mac (requires devenv)
 
-On macOS, build once and install a per-user LaunchAgent. It starts after login, when cmux and
-Tailscale can run in the user session. The installer requires an existing private `.env` and never
+The bundled LaunchAgent installer currently uses devenv. On macOS, build once and install
+a per-user LaunchAgent. It starts after login, when cmux and Tailscale can run in the user session.
+The installer requires an existing private `.env` and never
 changes Tailscale Serve or tailnet policy.
 
 ```bash
@@ -194,14 +234,14 @@ CMUX_REMOTE_ORIGIN=https://cmux.your-tailnet.ts.net
 CMUX_REMOTE_TAILSCALE_CAPABILITY=example.com/cap/cmux-remote
 ```
 
-Build the PWA, forward the capability through Serve, then start the bridge:
+From the repository root, build the PWA, forward the capability through Serve, then start the bridge:
 
 ```bash
-devenv shell -- build-all
+bun run --cwd client build
 tailscale serve --bg \
   --accept-app-caps=example.com/cap/cmux-remote \
   http://127.0.0.1:3456
-devenv shell -- bun run --cwd server start
+bun run server/src/index.ts
 ```
 
 The bridge prints one six-digit code valid for ten minutes. It is consumed after a successful
@@ -221,7 +261,7 @@ Serve is still preferred for HTTPS remote access:
 ```bash
 CMUX_REMOTE_TOKEN='<generated token>' \
 CMUX_REMOTE_ORIGIN='https://your-mac.your-tailnet.ts.net' \
-devenv shell -- bun run --cwd server start
+bun run server/src/index.ts
 ```
 
 ### Configuration
