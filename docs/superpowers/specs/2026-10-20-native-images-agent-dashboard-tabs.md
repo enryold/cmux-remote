@@ -1,8 +1,9 @@
 # cmux 0.65.2 — native images, agent dashboard, and terminal tabs
 
 **Date:** 2026-10-20
-**Status:** authorized and implemented locally; full check passed on 2026-10-20; not yet merged,
-released or verified on iPhone hardware. See the [validation record](../plans/2026-10-20-native-images-agent-dashboard-tabs.md).
+**Status:** integrated into `master` on 2026-10-21; the full check passed on the exact delivery content.
+Complete target Mac/iPhone PWA release acceptance remains pending. See the
+[validation record](../plans/2026-10-20-native-images-agent-dashboard-tabs.md).
 
 This supplements the [surface previews](2026-10-04-surface-content-previews-design.md) and
 [command center](2026-09-13-cmux-remote-command-center-design.md) designs. The user authorized

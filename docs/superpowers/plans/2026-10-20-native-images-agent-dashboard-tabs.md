@@ -407,3 +407,14 @@ One batched desktop/iPhone visual inspection confirms single-row separators and 
 Scoped source diff, protected configuration hashes, documentation links and diff checks pass.
 Current assets are built in place; no server restart, commit or lifecycle date was added. Physical
 iPhone acceptance remains unverified.
+
+## Delivery — 2026-10-21
+
+The user authorized a repository push and README/changelog update, explicitly excluding the separate
+Cloudflare Access work. Commit `3d2d123` integrates the implemented features into `master`. The exact
+delivery content passed `devenv shell -- check` in an isolated checkout without Access changes:
+103 client, 111 server, 21 setup, 3 LaunchAgent and 63 E2E tests, plus the intentional Chromium pairing
+skip. Only the existing lint infos and Vite chunk warning remain. README and CHANGELOG describe the
+current product; the roadmap now records Developed for the three newly integrated feature rows.
+Live dates remain pending complete physical-device acceptance. Cloudflare source/tests/specification
+and its documentation hunks are preserved locally, with no secrets or generated assets staged.

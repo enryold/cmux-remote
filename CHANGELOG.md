@@ -42,5 +42,6 @@ Changes to this fork of [hummer98/cmux-remote](https://github.com/hummer98/cmux-
 
 - Verified against the installed cmux 0.65.2 socket. Native Markdown and original-resolution image
   reads remain unavailable; there is no arbitrary filesystem fallback or browser control.
-- Automated client/server tests and Chromium/iPhone WebKit flows cover input, reconnection, tab
-  actions, previews, colors and mobile layouts. Full physical-iPhone release acceptance remains pending.
+- `devenv shell -- check` passes with 103 client, 111 server, 21 setup, 3 LaunchAgent and 63
+  Chromium/iPhone WebKit E2E tests, plus one intentional pairing skip. Full physical-iPhone release
+  acceptance remains pending.
