@@ -1,0 +1,74 @@
+import { expect, test } from "@playwright/test";
+import { login } from "./helpers";
+const control = "http://127.0.0.1:3458";
+test.beforeEach(async ({ request }) => { await request.post(`${control}/features/reset`); });
+test.afterEach(async ({ request }) => { await request.post(`${control}/features/reset`); });
+
+test("shows live agent state, attention, notifications and safe fallback without reading unselected terminals", async ({ page, request }) => {
+  const frames: string[] = [];
+  page.on("websocket", (socket) => socket.on("framereceived", (frame) => frames.push(String(frame.payload))));
+  await login(page);
+  const agent = page.getByRole("button", { name: "API Agent", exact: true });
+  await expect(agent.getByText("Working", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "UI Agent", exact: true }).getByText("Idle", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Active 1m ago/).first()).toBeVisible();
+  await request.post(`${control}/features/attention`);
+  await expect(agent.getByText("Needs attention", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 unread", { exact: true })).toBeVisible();
+  await expect(page.getByText("Approval needed", { exact: true })).toHaveCount(0);
+  await expect(agent.getByRole("img", { name: "Needs attention", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Dev server", exact: true }).getByRole("img", { name: "Unread notification", exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("dashboard.png") });
+  expect(frames.join(" ")).not.toMatch(/current_directory|file_path|private\/redacted|Approval needed/);
+  const calls = await (await request.get(`${control}/calls`)).json();
+  expect(calls.some((call: { method: string }) => call.method === "surface.read_text")).toBe(false);
+  await request.post(`${control}/features/ambiguous`);
+  await expect(agent.getByText("Unknown", { exact: true })).toBeVisible();
+  await request.post(`${control}/features/unsupported`);
+  await expect(page.getByText("Approval needed", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "Unread notification" })).toHaveCount(0);
+  await agent.click();
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("api ready");
+});
+
+test("groups inactive tabs, promotes an unread terminal and opens its exact terminal from the bell", async ({ page, request }) => {
+  await login(page);
+  const workspace = page.locator(".workspace-group").filter({ has: page.getByRole("heading", { name: "CODEX", exact: true }) });
+  const group = workspace.locator("details");
+  await expect(group.locator("summary")).toHaveText(/Inactive tabs \(\d+\)/);
+  await expect(group).not.toHaveAttribute("open", "");
+  await expect(page.getByRole("button", { name: "Browser preview", exact: true })).toHaveCount(0);
+  await group.locator("summary").click();
+  await expect(group).toHaveAttribute("open", "");
+  await expect(page.getByRole("button", { name: "Browser preview", exact: true })).toBeVisible();
+  await group.locator("summary").press("Enter");
+  await expect(group).not.toHaveAttribute("open", "");
+  await request.post(`${control}/features/attention`);
+  const notified = page.getByRole("button", { name: "Dev server", exact: true });
+  const bell = notified.getByRole("img", { name: "Unread notification", exact: true });
+  await expect(bell).toBeVisible();
+  await expect(notified).toHaveAccessibleDescription("Unread notification");
+  await expect(bell).toHaveCSS("color", "rgb(255, 209, 102)");
+  await expect(notified.locator(".surface-dot")).toHaveCount(0);
+  expect(await notified.evaluate((element) => element.closest("details") === null)).toBe(true);
+  await bell.click();
+  await expect(page.locator(".app-header strong")).toHaveText("Dev server");
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("server ready");
+  const calls = await (await request.get(`${control}/calls`)).json();
+  const reads = calls.filter((call: { method: string }) => call.method === "surface.read_text");
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads.every((call: { surfaceId: string }) => call.surfaceId === "44444444-4444-4444-8444-444444444444")).toBe(true);
+  expect(calls.some((call: { method: string }) => call.method.startsWith("notification.") && call.method !== "notification.list")).toBe(false);
+});
+
+test("clears trusted agent status offline and restores it on reconnect", async ({ page, context }) => {
+  await login(page);
+  const agent = page.getByRole("button", { name: "API Agent", exact: true });
+  await expect(agent.getByText("Working", { exact: true })).toBeVisible();
+  await context.setOffline(true);
+  await expect(agent.getByText("Unknown", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New terminal in CODEX", exact: true })).toBeDisabled();
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("pageshow")));
+  await expect(agent.getByText("Working", { exact: true })).toBeVisible();
+});

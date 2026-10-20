@@ -29,6 +29,6 @@ describe("device preferences", () => {
     expect(result.current.persistenceError).toBeTruthy();
     expect(localStorage.getItem(PREFERENCES_STORAGE_KEY)).toBe(prior);
     const reload = renderHook(useTerminalPreferences);
-    expect(reload.result.current.preferences.fontSize).toBe(13);
+    expect(reload.result.current.preferences.fontSize).toBe(12);
   });
 });

@@ -44,7 +44,7 @@ describe("preview capture", () => {
       expect(fake.requests[2]?.params).toEqual({ workspace_id: PREVIEW_WORKSPACE, surface_id: PREVIEW_SURFACE });
     } finally { service.close(); await fake.close(); }
   });
-  it.each(["terminal", "markdown", "filepreview", "unknown"])("rejects %s without a capture", async (type) => {
+  it.each(["terminal", "markdown", "unknown"])("rejects %s without a capture", async (type) => {
     const fake = await startFakeCmuxServer({ onRequest(request, socket, server) { server.reply(socket, request.id, previewTree(type)); } });
     const service = createPreviewService(previewConfig(fake.path));
     try { await expect(service.capture(PREVIEW_SURFACE)).rejects.toThrow("preview_unsupported"); expect(fake.requests.map((item) => item.method)).toEqual(["system.tree"]); }

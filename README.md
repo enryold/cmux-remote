@@ -17,24 +17,32 @@ This fork builds on [hummer98/cmux-remote](https://github.com/hummer98/cmux-remo
 lightweight mobile terminal viewer. It adds practical controls, connection recovery, and a guided
 private setup:
 
-- **Find the right terminal.** Browse live workspaces and their panels in one dashboard, then
-  open the exact terminal you need, even when a workspace has several panes.
-- **Reply comfortably.** Use a visible prompt box, reliable Enter handling, special keys,
-  saved commands, and your own toolbar favorites.
-- **Read on a small screen.** Scroll through output, select and copy text, and adjust the font
-  size without resizing the terminal on your Mac.
+- **Find what needs attention.** See live agent states, workspace activity and notification bells.
+  Open the exact terminal from its row; expand inactive tabs when you need them.
+- **Manage terminal tabs.** The circled plus creates a terminal and opens it on your phone.
+  Confirm individual closes or close the expanded inactive group with **Chiudi tutte**.
+- **Draft on your phone.** Write locally in a three-line prompt with native keyboard suggestions
+  and correction. Return sends it; Shift+Return adds a line. Shortcuts and the footer hide while
+  editing, leaving more room for output.
+- **Keep useful keys close.** Use contextual question controls, saved commands and toolbar favorites
+  without opening the phone keyboard when navigating choices.
+- **Read on a small screen.** Keep terminal colors and compact prompt borders, scroll through output,
+  select and copy text, and adjust the font without resizing the terminal on your Mac.
 - **Attach files and photos.** Upload them to the Mac, review their references in your prompt,
   and send when ready. Attaching a file alone never submits a command.
-- **Check browser panels.** View a screenshot of an open cmux browser panel, refresh it, and
-  zoom or pan on your phone.
+- **Check browser and image panels.** View browser screenshots and native image thumbnails,
+  refresh them, and zoom or pan on your phone.
 - **Recover after interruptions.** Connections recover automatically and output refreshes when
   you return to the app. Terminal input is never automatically replayed after reconnecting.
 - **Set up private access.** The setup wizard walks you through authorizing one iPhone and
   pairing with a six-digit code. You can also configure the bridge to start when you log in
   to your Mac.
 
-Browser previews are read-only. Viewing native Markdown and image panels is still blocked by
-the installed cmux API; the latest mobile flows still need final acceptance on a physical iPhone.
+Browser and native image previews are read-only. Native Markdown and original-resolution image
+reads remain unavailable on the verified cmux 0.65.2 socket. The complete real-device release
+checklist still needs acceptance on a physical iPhone.
+
+See the [changelog](CHANGELOG.md) for the latest changes.
 
 ## Getting started
 
@@ -149,17 +157,21 @@ unload the agent and remove its plist from `~/Library/LaunchAgents`.
 
 ## Current status
 
-The current build provides Milestone 2 terminal usability and browser previews alongside the reliable terminal:
+The current build provides Milestone 2 terminal controls and image previews, the Milestone 3 agent
+dashboard, and explicit tab actions alongside the reliable terminal:
 
 - dynamic workspace, pane, and typed-surface discovery without fixed names or counts;
 - a dense mobile dashboard with exact-surface navigation and browser back support;
-- xterm.js output with scrollback, selection, copy, paste, and scroll-position preservation;
+- structured agent states, activity, notification summaries/unread counts and workspace totals;
+- new terminals in an explicit workspace/pane and confirmed closing of the selected tab;
+- read-only xterm.js output with scrollback, selection, copy, and scroll-position preservation;
   touch gestures scroll terminal history while the header and bottom controls stay in place;
-- direct terminal typing plus a visible prompt composer that sends text followed by a real Enter key;
+- a local prompt composer that sends the complete text followed by a real Enter key;
 - file and image uploads from the composer, with editable references and explicit Send;
 - a configurable Shortcuts menu for named keys (including Shift+Left and Shift+Tab), saved commands,
   toolbar favorites, and locally persisted terminal font size;
 - read-only browser screenshots with manual Refresh and local zoom/pan;
+- native PNG/JPEG/WebP panel thumbnails, up to 1024 px, using cmux 0.65.2's authorized descriptors;
 - adaptive output polling, topology event subscriptions, foreground refresh, and automatic reconnect;
 - local terminal sizing and font changes that preserve the Mac terminal's dimensions;
 - an installable dark-mode PWA with iPhone safe-area and software-keyboard handling;
@@ -167,8 +179,9 @@ The current build provides Milestone 2 terminal usability and browser previews a
   Tailscale pairing.
 
 The Milestone 1 flow was exercised from iPhone Safari over Tailscale for pairing, terminal switching,
-output, prompt submission, special keys, keyboard layout, and viewport cleanup. The new Milestone 2
-flows have automated Chromium and iPhone WebKit coverage; their hardware iPhone acceptance is pending. The deterministic
+output, prompt submission, special keys, keyboard layout, and viewport cleanup. The new Milestone 2/3
+and tab-action flows have automated Chromium and iPhone WebKit coverage; hardware iPhone acceptance
+is pending. The deterministic
 gate runs client and server tests plus Chromium and iPhone WebKit E2E tests against a fake cmux
 socket. Repeat the real-device checklist below before tagging a release.
 
@@ -189,7 +202,8 @@ Controlling this app can be equivalent to controlling your Mac shell. The bridge
   screenshot reads, fresh ownership checks, a 10-second deadline, and one capture in flight;
 - accepts a protected attachment POST for an exact live terminal, limited to 10 MiB per file,
   one upload in flight and a 120-second deadline; cmux owns storage and destination names;
-- never exposes arbitrary cmux RPC, browser input/navigation, workspace creation, or shell spawning;
+- never exposes arbitrary cmux RPC, browser input/navigation, workspace creation, or configurable
+  shell spawning; new terminals use fixed type/focus options in a verified existing workspace/pane;
 - never caches authentication, API, WebSocket, or terminal responses in the service worker.
 
 Do not bind to `0.0.0.0` or publish the bridge through a public tunnel. Device pairing is a second
@@ -361,13 +375,79 @@ Input is sent to an exact surface UUID and is never replayed after disconnect. O
 add, edit, or delete up to 20 single-line commands and choose up to 12 favorites for the toolbar.
 Preferences stay on this device. Saved commands send text followed by a real Enter to the open
 terminal. Ctrl-C interrupts a process; Ctrl-D ends input and may close a shell. Both are optional
-catalogue entries. Physical Ctrl input remains available.
+catalogue entries.
+
+Write or paste into **Prompt or command**: typing stays on the phone, so characters appear without
+waiting for the Mac's echo. The field displays three lines and scrolls longer drafts; Shift+Return
+inserts a line break. Native keyboard suggestions, autocorrection and spellchecking are enabled,
+subject to your device's keyboard settings. Return or Send transmits the whole prompt followed by
+Enter. While the composer has focus, the shortcut bar and connection footer hide to leave more space
+for terminal output; they return when editing ends. Device safe-area spacing remains. The output
+area is read-only and does not open the phone keyboard; selection, copy and scrolling still work.
+Shortcut buttons continue to send their keys immediately when the bar is visible, including Enter
+with an empty draft.
+
+When cmux identifies the current agent, question keys stay visible on the right below Send:
+**Shift+←, Enter, Esc** for Codex; **↑, ↓, Enter, Esc** for Claude Code. Other favorites scroll
+between Shortcuts and those keys, without duplicates. The sheet marks fixed keys as always visible;
+your saved favorites stay unchanged. Unknown agents use the saved toolbar. All catalogue keys remain
+available to every terminal. Shortcut taps send the key without focusing the terminal's typing input,
+so navigating choices does not request the phone keyboard.
 
 Terminal snapshots are coalesced while a write, touch gesture, or selection is active. Appended
 output keeps the same xterm buffer; changed prompts retain the visible history where it remains
 available. **Latest** returns to the bottom without sending input to cmux.
-The **A− / A+** controls in Shortcuts set the terminal font from 10 to 24 px and persist on this
-device. The terminal refits without being recreated or changing the Mac's global font settings.
+The terminal defaults to 12 px; the **A− / A+** controls in Shortcuts set it from 10 to 24 px and
+persist on this device. Existing saved sizes are preserved. The terminal refits without being
+recreated or changing the Mac's global font settings. Attachment and Send use compact icons, and
+the shortcut strip uses quieter 12 px labels while retaining 44 px touch targets. The prompt input
+stays at 16 px to avoid iPhone focus zoom.
+The terminal and controls have a 12 px side gutter (or the larger device safe area). Shortcuts opens
+in an inset sheet with compact key rows, star favorites, and the same quiet dark styling.
+
+Terminal snapshots preserve explicit foreground/background colors and emphasis, including colored
+diffs, when cmux supplies a full styled capture. The bridge first reads the selected running terminal,
+then converts its bounded render grid into generated color codes; unsupported, invalid or slow
+captures retain plain text. Default colors keep the web app's theme. This does not resize the Mac
+terminal or add a raw terminal-byte stream. Trailing desktop fill cells are omitted so colored
+prompts stay compact on the phone; prompt text, menu choices, indentation and line breaks remain visible.
+Standalone horizontal separator lines fit the local terminal width instead of wrapping, including
+after rotation or font changes. Text, code and table borders retain their content.
+
+Installed iPhone PWAs use a standalone height fallback that includes safe areas; browser tabs retain
+dynamic viewport height. Some iOS versions also have system-owned viewport gaps
+([WebKit report](https://bugs.webkit.org/show_bug.cgi?id=301994)); physical-device confirmation is
+needed if a strip remains after closing and reopening the PWA.
+Connection status appears once, centered horizontally and vertically in the footer on both dashboard
+and terminal views.
+
+The workspace dashboard uses structured `mobile.workspace.list` metadata for **Working**, **Idle**,
+**Needs attention**, or **Unknown**. A yellow bell replaces the selection dot on terminals with an
+unread notification or a structured request for attention. Click the bell or its row to enter that
+exact terminal on the phone. Notification ownership comes from `notification.list`; only a boolean
+reaches the PWA, and message previews are not displayed. Opening locally does not mark notifications
+read on the Mac. Missing,
+ambiguous or unavailable metadata shows Unknown; disconnect clears trusted evidence and snapshots
+expire after 45 seconds without refresh. Idle does not mean a task is complete. Metadata uses a
+separate socket with a one-second total wait, so its failure does not interrupt terminal access. The
+dashboard does not read output from unselected terminals or parse agent prose.
+
+When a workspace has more than two inactive tabs, they appear under **Inactive tabs (X)**. Expand
+the group to browse them or use **Chiudi tutte** at its upper right. One confirmation closes the
+captured inactive tabs in that workspace; running processes and unsaved work may be lost. Tabs that
+become selected, working or attentive are skipped, and closure stops on an error or lost connection.
+Newly appeared tabs are not included; cmux keeps its last tab open. Inactive means unselected without current working/attention evidence;
+selected tabs, working terminals and terminals with a bell stay visible. A new notification promotes
+its terminal out of the collapsed group on refresh.
+
+Choose the **circled plus** in a workspace or the selected tab's header to create
+a terminal in that exact pane and enter it directly on the phone without changing focus on the Mac.
+The close button asks for
+confirmation before stopping processes or losing unsaved changes. cmux refuses to close the last
+surface in a workspace. Creation and close are sent once; if acknowledgement is lost, inspect the
+tabs before trying again. These controls are disabled while disconnected or another action is pending.
+Action notices can be dismissed with their close button and clear when navigating to another tab.
+If creation reports an outdated bridge, run `devenv shell -- service-restart` and reload the app.
 
 Browser rows open a read-only capture of that exact panel without changing focus on the Mac.
 Only the HTTP(S) origin is shown as a URL label; credentials, path, query, and fragment are removed.
@@ -377,11 +457,13 @@ auth expiry, panel removal, or leaving the view clears its bytes. Previews are h
 The bridge validates PNG bytes up to 2 MiB, axes up to 4,096 px, and area up to 8,388,608 px, within
 a 3 MiB JSON response budget. Oversized captures fail without changing the socket frame limit.
 
-Native Markdown/image rows currently show **Preview unavailable**. On cmux 0.64.25 (106), the
-advertised `panel.artifact.v1` capability has no callable `mobile.panel.artifact.stat` worker handler,
-and the tree provides no authorized content descriptor. Local-file viewing therefore remains
-blocked; the bridge does not infer file paths or read arbitrary files. Browser screenshots work
-independently of this missing native provider.
+On cmux 0.65.2 (111), saved PNG/JPEG/WebP panels open read-only **JPEG thumbnails up to 1024 px**.
+The bridge resolves the exact panel's descriptor server-side, checks allowed media, validates JPEG
+bytes/dimensions and rechecks file association after capture. The PWA never supplies or receives a
+native file path. Native images share the existing 2 MiB image/3 MiB JSON budgets and local zoom.
+Markdown and original-resolution reads remain unavailable: `mobile.panel.artifact.fetch` is not
+exposed on the local control socket, and `surface.read_text` only accepts terminals. There is no
+filesystem fallback. Older cmux versions can show Preview unavailable for native images.
 
 ## Real-device release checklist
 
@@ -389,7 +471,7 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 
 - complete discovery and terminal switching;
 - rapid bounded output and idle output;
-- typing, paste, physical/iPhone/composer Enter, selection, copy, and scroll preservation;
+- local drafting, paste, physical/iPhone/composer Enter, read-only output, selection, copy, and scroll preservation;
 - Shortcuts CRUD, favorites, optional Ctrl-C/Ctrl-D, and disposable Codex/Claude question menus
   using Shift+Left, Shift+Tab, arrows, Escape, and empty Enter;
 - saved launcher commands run once and never replay on reload/reconnect;
@@ -397,7 +479,10 @@ Before marking a release live, use eight disposable terminal surfaces and verify
   and explicit Send to the original terminal;
 - 10–24 px font persistence and history position during output, touch, selection, and font changes;
 - read-only browser capture, Refresh, local zoom/pan, stale failures, closure, and auth expiry;
-- native Markdown/image rows truthfully report unavailable until the provider gate passes;
+- native image thumbnails, Refresh/local zoom, and truthful unavailable Markdown;
+- live agent states, notification summaries/counts, and Unknown after metadata failure/disconnect;
+- exact-pane terminal creation, close cancellation/confirmation, last-tab protection, and no replay
+  after reconnect;
 - selected-surface closure returns to the dashboard;
 - iPhone lock/background for ten minutes and foreground recovery;
 - Tailscale disconnect/reconnect without a manual reload;
@@ -415,6 +500,8 @@ Before marking a release live, use eight disposable terminal surfaces and verify
 - [Read-only content preview design and compatibility gate](docs/superpowers/specs/2026-10-04-surface-content-previews-design.md)
 - [Read-only content preview implementation](docs/superpowers/plans/2026-10-04-surface-content-previews.md)
 - [Milestone 2 validation and remaining acceptance](docs/superpowers/plans/2026-10-04-v2-mobile-validation.md)
+- [cmux 0.65.2 native images, agent dashboard and tabs](docs/superpowers/specs/2026-10-20-native-images-agent-dashboard-tabs.md)
+- [Native images, dashboard and tabs implementation](docs/superpowers/plans/2026-10-20-native-images-agent-dashboard-tabs.md)
 - [Terminal attachments design](docs/superpowers/specs/2026-10-05-terminal-attachments-design.md)
 - [Terminal attachments implementation plan](docs/superpowers/plans/2026-10-05-terminal-attachments.md)
 - [Roadmap](docs/superpowers/ROADMAP.md)

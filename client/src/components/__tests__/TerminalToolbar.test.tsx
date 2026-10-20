@@ -15,9 +15,75 @@ import { useTerminalPreferences } from "../../hooks/useTerminalPreferences";
 afterEach(() => { cleanup(); localStorage.clear(); });
 function Toolbar({ connected = true, ...props }: Pick<Parameters<typeof TerminalToolbar>[0], "onKey" | "onSubmit"> & {
   connected?: boolean; connectionGeneration?: number; onUpload?(file: File, signal: AbortSignal): Promise<string>;
+  agentSource?: string | null;
 }) {
   return <TerminalToolbar {...props} connected={connected} settings={useTerminalPreferences()} />;
 }
+
+it("offers three local draft rows, keeps Shift+Return local and submits the whole multiline prompt once", async () => {
+  const onSubmit = vi.fn().mockResolvedValue("accepted");
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  expect(input.tagName).toBe("TEXTAREA");
+  expect(input.getAttribute("rows")).toBe("3");
+  fireEvent.change(input, { target: { value: "First line\nSecond line\nThird line" } });
+  fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledExactlyOnceWith("First line\nSecond line\nThird line"));
+});
+
+it("enables the keyboard's native correction and spelling suggestions for the prompt", () => {
+  render(<Toolbar onKey={vi.fn()} onSubmit={vi.fn()} />);
+  const input = screen.getByRole("textbox", { name: "Prompt or command" });
+  expect(input.getAttribute("autocorrect")).toBe("on");
+  expect(input.getAttribute("spellcheck")).toBe("true");
+});
+
+it.each([
+  ["codex", ["Shift+←", "Enter", "Esc"], ["shift+left", "enter", "escape"]],
+  ["claude_code", ["↑", "↓", "Enter", "Esc"], ["up", "down", "enter", "escape"]],
+] as const)("keeps %s question keys in their own fixed group without duplicate favorites", (agentSource, labels, keys) => {
+  const onKey = vi.fn();
+  render(<Toolbar agentSource={agentSource} onKey={onKey} onSubmit={vi.fn()} />);
+  const group = screen.getByRole("group", { name: "Question controls" });
+  expect(within(group).getAllByRole("button").map((button) => button.textContent)).toEqual(labels);
+  for (const label of labels) {
+    const buttons = screen.getAllByRole("button", { name: label });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0] as HTMLElement);
+  }
+  expect(onKey.mock.calls.map(([key]) => key)).toEqual(keys);
+  fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
+  expect(screen.getByRole("button", { name: `Always visible ${labels[0]}` }).hasAttribute("disabled")).toBe(true);
+});
+
+it("keeps the saved favorites for unknown agents and disables contextual invocation offline", () => {
+  const onKey = vi.fn();
+  const { rerender } = render(<Toolbar agentSource="unknown_agent" onKey={onKey} onSubmit={vi.fn()} />);
+  expect(screen.queryByRole("group", { name: "Question controls" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Shift+←" })).toBeTruthy();
+  rerender(<Toolbar agentSource="codex" connected={false} onKey={onKey} onSubmit={vi.fn()} />);
+  const group = screen.getByRole("group", { name: "Question controls" });
+  for (const button of within(group).getAllByRole("button")) {
+    expect(button.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(button);
+  }
+  expect(onKey).not.toHaveBeenCalled();
+});
+
+it("offers compact attachment and send icons with accessible action names", async () => {
+  const onSubmit = vi.fn().mockResolvedValue("accepted");
+  render(<Toolbar onKey={vi.fn()} onSubmit={onSubmit} onUpload={vi.fn()} />);
+  for (const name of ["Attach files or images", "Send"]) {
+    const button = screen.getByRole("button", { name });
+    expect(button.textContent).toBe("");
+    expect(button.querySelector("svg")).not.toBeNull();
+  }
+  fireEvent.change(screen.getByRole("textbox", { name: "Prompt or command" }), { target: { value: "continue" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledExactlyOnceWith("continue"));
+});
 
 it("maps every named key to the exact cmux key", () => {
   const onKey = vi.fn();
@@ -62,10 +128,10 @@ it("submits a visible prompt and clears it only after accepted", async () => {
   fireEvent.submit(input.closest("form") as HTMLFormElement);
 
   await waitFor(() => expect(onSubmit).toHaveBeenCalledWith("continue the task"));
-  expect((input as HTMLInputElement).value).toBe("continue the task");
+  expect((input as HTMLTextAreaElement).value).toBe("continue the task");
 
   fireEvent.submit(input.closest("form") as HTMLFormElement);
-  await waitFor(() => expect((input as HTMLInputElement).value).toBe(""));
+  await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe(""));
 });
 
 it("sends empty Return once and keeps composing Return local", async () => {
@@ -109,7 +175,7 @@ it("attaches files sequentially, preserves typing and quotes paths without submi
   expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.change(input, { target: { value: "Inspect both" } });
   finish("/tmp/it's notes.txt");
-  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Inspect both '/tmp/it'\\''s notes.txt' '/tmp/photo.png'"));
+  await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe("Inspect both '/tmp/it'\\''s notes.txt' '/tmp/photo.png'"));
   expect(onUpload).toHaveBeenCalledTimes(2);
   expect(onSubmit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -125,7 +191,7 @@ it("retains the prompt on failed or oversized uploads and allows choosing the sa
   const file = new File(["notes"], "notes.txt");
   fireEvent.change(picker, { target: { files: [file] } });
   await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Upload failed/));
-  expect((input as HTMLInputElement).value).toBe("Keep this");
+  expect((input as HTMLTextAreaElement).value).toBe("Keep this");
   const tooBig = new File(["x"], "large.bin");
   Object.defineProperty(tooBig, "size", { value: 10 * 1024 * 1024 + 1 });
   fireEvent.change(picker, { target: { files: [tooBig] } });
@@ -135,7 +201,7 @@ it("retains the prompt on failed or oversized uploads and allows choosing the sa
   await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/four files/));
   expect(onUpload).toHaveBeenCalledTimes(1);
   fireEvent.change(picker, { target: { files: [file] } });
-  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Keep this '/tmp/notes.txt'"));
+  await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe("Keep this '/tmp/notes.txt'"));
 });
 
 it("aborts on reconnect or departure and ignores late upload responses", async () => {
@@ -151,7 +217,7 @@ it("aborts on reconnect or departure and ignores late upload responses", async (
   rerender(<Toolbar {...props} connectionGeneration={2} />);
   expect(signal?.aborted).toBe(true);
   finish("/tmp/late.txt");
-  await waitFor(() => expect((input as HTMLInputElement).value).toBe("Keep"));
+  await waitFor(() => expect((input as HTMLTextAreaElement).value).toBe("Keep"));
   fireEvent.change(screen.getByLabelText("Files and images"), { target: { files: [new File(["x"], "x.txt")] } });
   await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(2));
   unmount();

@@ -19,6 +19,7 @@ interface WireRequest {
 }
 
 const surfaceId = "11111111-1111-4111-8111-111111111111";
+
 const tree: TreeSnapshot = {
   workspaces: [
     {
@@ -109,12 +110,50 @@ describe("useCmux", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not let an older discovery response replace a newer post-action tree", async () => {
+    const { result } = renderHook(() => useCmux());
+    const socket = await bootstrap(result);
+    let older: Promise<TreeSnapshot> | undefined;
+    let newer: Promise<TreeSnapshot> | undefined;
+    act(() => { older = result.current.refreshTree(); newer = result.current.refreshTree(); });
+    const [first, second] = requests(socket).filter((request) => request.method === "system.tree").slice(-2);
+    if (!first || !second || !older || !newer) throw new Error("missing discovery requests");
+    await act(async () => {
+      respond(socket, second, { workspaces: tree.workspaces.map((workspace) => ({ ...workspace, title: "Latest topology" })) });
+      await newer;
+    });
+    await act(async () => { respond(socket, first, tree); await older; });
+    expect(result.current.tree.workspaces[0]?.title).toBe("Latest topology");
+  });
+
   it("loads capabilities and a typed tree after the bridge connects", async () => {
     const { result } = renderHook(() => useCmux());
     await bootstrap(result);
     expect(result.current.bridgeStatus).toBe("connected");
     expect(result.current.cmuxStatus).toBe("connected");
     expect(result.current.capabilities).toContain("terminal.viewport.v1");
+  });
+
+  it("accepts only boolean unread evidence and clears it when disconnected", async () => {
+    const { result } = renderHook(() => useCmux());
+    const socket = await bootstrap(result);
+    const metadataTree = structuredClone(tree);
+    const workspace = metadataTree.workspaces[0];
+    if (!workspace?.panes[0]?.surfaces[0]) throw new Error("missing fixture terminal");
+    workspace.activity = { observedAt: Date.now(), lastActivityAt: null, unreadCount: 1 };
+    const surface = workspace.panes[0].surfaces[0];
+    for (const value of ["true", true]) {
+      Object.assign(surface, { hasUnread: value });
+      await act(async () => {
+        const pending = result.current.refreshTree();
+        respond(socket, lastRequest(socket, "system.tree"), metadataTree);
+        await pending;
+      });
+      expect(result.current.tree.workspaces[0]?.panes[0]?.surfaces[0]?.hasUnread).toBe(value === true ? true : undefined);
+    }
+    act(() => socket.closeFromServer());
+    expect(result.current.tree.workspaces[0]?.activity).toBeUndefined();
+    expect(result.current.tree.workspaces[0]?.panes[0]?.surfaces[0]?.hasUnread).toBeUndefined();
   });
 
   it("keeps a newer cmux connected state when an earlier connecting effect is still pending", async () => {

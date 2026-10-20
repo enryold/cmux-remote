@@ -5,15 +5,18 @@ import { Terminal } from "../Terminal";
 import { useTerminalPreferences } from "../../hooks/useTerminalPreferences";
 
 const fake = vi.hoisted(() => ({ instances: [] as Array<{
-  options: { fontSize: number }; writes: Array<{ text: string; done: () => void }>;
+  options: { fontSize: number; disableStdin: boolean }; writes: Array<{ text: string; done: () => void }>;
+  textarea: HTMLTextAreaElement;
   selection: boolean; selectionChanged: () => void; dispose: ReturnType<typeof vi.fn>;
+  focus: ReturnType<typeof vi.fn>;
   resized: (size: { cols: number; rows: number }) => void;
 }> }));
 vi.mock("@xterm/xterm", () => ({ Terminal: class {
-  options; writes: Array<{ text: string; done: () => void }> = []; selection = false; selectionChanged = () => {}; resized = (_size: { cols: number; rows: number }) => {};
+  options; textarea = document.createElement("textarea"); writes: Array<{ text: string; done: () => void }> = []; selection = false; selectionChanged = () => {}; resized = (_size: { cols: number; rows: number }) => {};
   buffer = { active: { baseY: 0, viewportY: 0, length: 0, getLine: () => undefined } }; rows = 24;
-  constructor(options: { fontSize: number }) { this.options = options; fake.instances.push(this); }
-  loadAddon() {} open() {} onData() {} onResize(callback: (size: { cols: number; rows: number }) => void) { this.resized = callback; } onScroll() {} reset() {} focus() {} scrollToBottom() {} scrollToLine() {}
+  constructor(options: { fontSize: number; disableStdin: boolean }) { this.options = options; fake.instances.push(this); }
+  loadAddon() {} open() {} onData() {} onResize(callback: (size: { cols: number; rows: number }) => void) { this.resized = callback; } onScroll() {} reset() {} scrollToBottom() {} scrollToLine() {}
+  focus = vi.fn();
   hasSelection() { return this.selection; }
   onSelectionChange(callback: () => void) { this.selectionChanged = callback; }
   write(text: string, done: () => void) { this.writes.push({ text, done }); }
@@ -22,10 +25,23 @@ vi.mock("@xterm/xterm", () => ({ Terminal: class {
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: class { fit() {} } }));
 vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
 afterEach(() => { cleanup(); fake.instances = []; localStorage.clear(); vi.useRealTimers(); });
-function Screen({ content, viewportEnabled = false, onViewport = vi.fn(), onViewportClear = vi.fn() }: { content: string; viewportEnabled?: boolean; onViewport?: (columns: number, rows: number, generation: number) => void; onViewportClear?: (generation: number) => void }) {
+function Screen({ content, viewportEnabled = false, onViewport = vi.fn(), onViewportClear = vi.fn(), onKey = vi.fn() }: { content: string; viewportEnabled?: boolean; onViewport?: (columns: number, rows: number, generation: number) => void; onViewportClear?: (generation: number) => void; onKey?: (key: string) => void }) {
   return <Terminal surfaceId="original" content={content} stale={false} viewportEnabled={viewportEnabled} connected settings={useTerminalPreferences()}
-    onInput={vi.fn()} onKey={vi.fn()} onSubmit={vi.fn()} onViewport={onViewport} onViewportClear={onViewportClear} />;
+    onKey={onKey} onSubmit={vi.fn()} onViewport={onViewport} onViewportClear={onViewportClear} />;
 }
+it("keeps terminal output read-only so all drafting stays in the local composer", () => {
+  render(<Screen content="ready" />);
+  expect(fake.instances[0]?.options.disableStdin).toBe(true);
+  expect(fake.instances[0]?.textarea.readOnly).toBe(true);
+  expect(fake.instances[0]?.textarea.inputMode).toBe("none");
+});
+it("sends shortcut keys without focusing the terminal's hidden input", () => {
+  const onKey = vi.fn();
+  render(<Screen content="menu choices" onKey={onKey} />);
+  fireEvent.click(screen.getByRole("button", { name: "↓" }));
+  expect(onKey).toHaveBeenCalledExactlyOnceWith("down");
+  expect(fake.instances[0]?.focus).not.toHaveBeenCalled();
+});
 it("serializes xterm writes and retains only the latest waiting snapshot", () => {
   const { rerender } = render(<Screen content="one" />);
   const terminal = fake.instances[0]; if (!terminal) throw new Error("missing terminal");
@@ -41,7 +57,7 @@ it("changes font without replacing the terminal or writing output again", () => 
   act(() => terminal.writes[0]?.done());
   fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
   fireEvent.click(screen.getByRole("button", { name: "Increase font" }));
-  expect(terminal.options.fontSize).toBe(14);
+  expect(terminal.options.fontSize).toBe(13);
   expect(fake.instances).toHaveLength(1);
   expect(terminal.writes).toHaveLength(1);
   for (let i = 0; i < 20; i++) fireEvent.click(screen.getByRole("button", { name: "Increase font" }));

@@ -4,6 +4,11 @@
 
 **Status:** approved for execution on 2026-10-04; browser screenshots merged into `master` on 2026-10-04; full check passed; native Markdown/image reads remain blocked and hardware iPhone acceptance is pending.
 
+**Compatibility update — 2026-10-20:** cmux 0.65.2 exposes native stat and image thumbnails on the
+local socket. The approved [follow-up](2026-10-20-native-images-agent-dashboard-tabs.md) governs
+that image subset. Markdown/original content fetch remains unavailable; the assessment below
+describes 0.64.25 and is retained as history.
+
 ## Intent and scope
 
 Enrico chose the simple version: consult content already open in cmux from the iPhone. The requested

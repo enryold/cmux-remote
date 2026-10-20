@@ -4,6 +4,8 @@ export type AllowedMethod =
   | "surface.read_text"
   | "surface.send_text"
   | "surface.send_key"
+  | "surface.create"
+  | "surface.close"
   | "terminal.viewport";
 
 export type AllowedKey =
@@ -37,12 +39,15 @@ export interface Capabilities {
   capabilities: string[];
 }
 
+export interface AgentActivity { source: string | null; state: "working" | "needs_attention" | "idle" | "unknown" }
+export interface WorkspaceActivity { observedAt: number; lastActivityAt: number | null; unreadCount: number }
 export interface TreeSnapshot {
   workspaces: Array<{
     id: string;
     title: string;
     index: number;
     selected: boolean;
+    activity?: WorkspaceActivity;
     panes: Array<{
       id: string;
       index: number;
@@ -54,6 +59,8 @@ export interface TreeSnapshot {
         index: number;
         selected: boolean;
         urlLabel: string | null;
+        agent?: AgentActivity;
+        hasUnread?: boolean;
       }>;
     }>;
   }>;

@@ -8,6 +8,8 @@ import {
   type ConnectionStatus,
   type ServerMessage,
   type TreeSnapshot,
+  type AgentActivity,
+  type WorkspaceActivity,
 } from "../lib/cmux-rpc";
 import { useWebSocket } from "./useWebSocket";
 
@@ -29,6 +31,8 @@ export interface CmuxApi {
   readText(surfaceId: string, lines?: number): Promise<string>;
   sendText(surfaceId: string, text: string): Promise<void>;
   sendKey(surfaceId: string, key: AllowedKey): Promise<void>;
+  createSurface(workspaceId: string, paneId: string): Promise<string>;
+  closeSurface(workspaceId: string, surfaceId: string): Promise<void>;
   reportViewport(
     surfaceId: string,
     columns: number,
@@ -94,6 +98,7 @@ function treeResult(value: unknown): TreeSnapshot {
         title: workspace.title,
         index: workspace.index,
         selected: workspace.selected,
+        activity: activityResult(workspace.activity),
         panes: workspace.panes.map((paneValue) => {
           const pane = record(paneValue);
           if (
@@ -129,6 +134,8 @@ function treeResult(value: unknown): TreeSnapshot {
                 index: surface.index,
                 selected: surface.selected,
                 urlLabel: surface.urlLabel as string | null,
+                agent: agentResult(surface.agent),
+                ...(surface.hasUnread === true ? { hasUnread: true } : {}),
               };
             }),
           };
@@ -136,6 +143,21 @@ function treeResult(value: unknown): TreeSnapshot {
       };
     }),
   };
+}
+
+function activityResult(value: unknown): WorkspaceActivity | undefined {
+  if (value === undefined) return undefined;
+  const item = record(value);
+  if (!item || typeof item.observedAt !== "number" || !Number.isFinite(item.observedAt)
+    || (item.lastActivityAt !== null && (typeof item.lastActivityAt !== "number" || !Number.isFinite(item.lastActivityAt)))
+    || typeof item.unreadCount !== "number" || !Number.isSafeInteger(item.unreadCount) || item.unreadCount < 0 || item.unreadCount > 9999) return undefined;
+  return { observedAt: item.observedAt, lastActivityAt: item.lastActivityAt as number | null, unreadCount: item.unreadCount };
+}
+function agentResult(value: unknown): AgentActivity | undefined {
+  const item = record(value);
+  if (!item || (item.source !== null && (typeof item.source !== "string" || new TextEncoder().encode(item.source).length > 160))
+    || !["working", "idle", "needs_attention", "unknown"].includes(String(item.state))) return undefined;
+  return { source: item.source as string | null, state: item.state as AgentActivity["state"] };
 }
 
 export function useCmux(
@@ -148,6 +170,7 @@ export function useCmux(
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [tree, setTree] = useState<TreeSnapshot>(EMPTY_TREE);
   const pendingRef = useRef(new Map<string, PendingRequest>());
+  const pendingTreeRefreshRef = useRef<Promise<TreeSnapshot> | null>(null);
   const connectionRef = useRef({ generation: 0, bridge: false, cmux: false });
   const [connectionGeneration, setConnectionGeneration] = useState(0);
   const invalidate = useCallback(() => {
@@ -158,6 +181,9 @@ export function useCmux(
       pending.reject(new Error("bridge_disconnected"));
     }
     pendingRef.current.clear();
+    pendingTreeRefreshRef.current = null;
+    setTree((previous) => ({ workspaces: previous.workspaces.map((workspace) => ({ ...workspace, activity: undefined,
+      panes: workspace.panes.map((pane) => ({ ...pane, surfaces: pane.surfaces.map((surface) => ({ ...surface, agent: undefined, hasUnread: undefined })) })) })) }));
   }, []);
   const isConnectionCurrent = useCallback((generation: number) => {
     const connection = connectionRef.current;
@@ -243,10 +269,17 @@ export function useCmux(
     return result;
   }, [rpc]);
 
-  const refreshTree = useCallback(async () => {
-    const result = treeResult(await rpc("system.tree"));
-    setTree(result);
-    return result;
+  const refreshTree = useCallback(() => {
+    const generation = connectionRef.current.generation;
+    const refresh: Promise<TreeSnapshot> = rpc("system.tree").then((value) => {
+      if (generation !== connectionRef.current.generation) throw new Error("bridge_disconnected");
+      if (pendingTreeRefreshRef.current && pendingTreeRefreshRef.current !== refresh) return pendingTreeRefreshRef.current;
+      const result = treeResult(value);
+      setTree(result);
+      return result;
+    });
+    pendingTreeRefreshRef.current = refresh;
+    return refresh;
   }, [rpc]);
   refreshTreeRef.current = refreshTree;
 
@@ -274,6 +307,16 @@ export function useCmux(
     },
     [rpc],
   );
+
+  const createSurface = useCallback(async (workspaceId: string, paneId: string) => {
+    const result = record(await rpc("surface.create", { workspace_id: workspaceId, pane_id: paneId }));
+    if (!result || result.workspace_id !== workspaceId || result.pane_id !== paneId || typeof result.surface_id !== "string") return invalidResult();
+    return result.surface_id;
+  }, [rpc]);
+  const closeSurface = useCallback(async (workspaceId: string, surfaceId: string) => {
+    const result = record(await rpc("surface.close", { workspace_id: workspaceId, surface_id: surfaceId, confirmed: true }));
+    if (!result || result.workspace_id !== workspaceId || result.surface_id !== surfaceId) return invalidResult();
+  }, [rpc]);
 
   const reportViewport = useCallback(
     async (
@@ -376,6 +419,8 @@ export function useCmux(
     readText,
     sendText,
     sendKey,
+    createSurface,
+    closeSurface,
     reportViewport,
     clearViewport,
   };

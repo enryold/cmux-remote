@@ -2,23 +2,27 @@ import type { ServerWebSocket } from "bun";
 import { CmuxClient, CmuxRequestError } from "./cmux-client";
 import type { CmuxEventStream } from "./cmux-events";
 import type { RuntimeConfig } from "./config";
+import { coloredTerminalText } from "./terminal-colors";
 import {
   parseAllowedRequest,
   RpcValidationError,
   sanitizeCmuxResult,
   toCmuxCall,
   type AllowedRequest,
+  type TreeSnapshot,
 } from "./rpc";
 
 export interface WSData {
   clientId: string;
   cmux: CmuxClient | null;
+  metadata: CmuxClient | null;
   cmuxState: "connected" | "disconnected" | null;
   inputTail: Promise<void>;
   inputQueued: number;
   viewport: { surfaceId: string; generation: number } | null;
   unsubscribeEvents: (() => void) | null;
   closed: boolean;
+  connectionGeneration: number;
 }
 
 interface WebSocketDependencies {
@@ -33,12 +37,14 @@ export function createWebSocketData(): WSData {
   return {
     clientId: crypto.randomUUID(),
     cmux: null,
+    metadata: null,
     cmuxState: null,
     inputTail: Promise.resolve(),
     inputQueued: 0,
     viewport: null,
     unsubscribeEvents: null,
     closed: false,
+    connectionGeneration: 0,
   };
 }
 
@@ -90,6 +96,22 @@ async function dispatch(
   const cmux = data.cmux;
   if (!cmux) throw new CmuxRequestError("cmux_disconnected");
 
+  const generation = data.connectionGeneration;
+  if (request.method === "surface.create" || request.method === "surface.close") {
+    if (!cmux.isConnected || data.cmuxState !== "connected") throw new CmuxRequestError("cmux_disconnected");
+    const tree = sanitizeCmuxResult("system.tree", await cmux.request("system.tree", { all: true })) as TreeSnapshot;
+    const owners = tree.workspaces.filter((workspace) => workspace.id === request.params.workspace_id);
+    const owner = owners[0];
+    if (owners.length !== 1 || !owner) throw new RpcValidationError("surface_unavailable");
+    if (request.method === "surface.create") {
+      if (owner.panes.filter((pane) => pane.id === request.params.pane_id).length !== 1) throw new RpcValidationError("surface_unavailable");
+    } else {
+      const matches = tree.workspaces.flatMap((workspace) => workspace.panes.flatMap((pane) => pane.surfaces.filter((surface) => surface.id === request.params.surface_id).map(() => workspace.id)));
+      if (matches.length !== 1 || matches[0] !== owner.id) throw new RpcValidationError("surface_unavailable");
+    }
+    if (data.closed || generation !== data.connectionGeneration || !cmux.isConnected) throw new CmuxRequestError("cmux_disconnected");
+  }
+
   if (request.method === "terminal.viewport") {
     const previous = data.viewport;
     const nextSurface = request.params.surface_id;
@@ -107,6 +129,34 @@ async function dispatch(
   const call = toCmuxCall(request, data.clientId);
   const result = await cmux.request(call.method, call.params);
 
+  if (request.method === "surface.read_text") {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const replay = await Promise.race([
+        cmux.request("terminal.replay", { surface_id: request.params.surface_id, anchor: "screen", max_scrollback_rows: request.params.lines }),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("capture_timeout")), 500); }),
+      ]);
+      const text = coloredTerminalText(replay, request.params.surface_id, request.params.lines);
+      if (!data.closed && generation === data.connectionGeneration && text !== null) return { text };
+    } catch { /* Older or unavailable captures retain the plain-text path. */ }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+  }
+  if (request.method === "system.tree") {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const metadata = await Promise.race([
+        (async () => {
+          const dashboard = await data.metadata?.request("mobile.workspace.list", {});
+          const notifications = await data.metadata?.request("notification.list", {}).catch(() => undefined);
+          return { dashboard, notifications };
+        })(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("metadata_timeout")), 1000); }),
+      ]);
+      return sanitizeCmuxResult(request.method, result, metadata.dashboard, metadata.notifications);
+    } catch { return sanitizeCmuxResult(request.method, result); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+  }
+
   if (request.method === "terminal.viewport") {
     if ("clear" in request.params) {
       if (data.viewport?.surfaceId === request.params.surface_id) {
@@ -119,14 +169,22 @@ async function dispatch(
       };
     }
   }
-  return sanitizeCmuxResult(request.method, result);
+  const sanitized = sanitizeCmuxResult(request.method, result);
+  if (request.method === "surface.create" || request.method === "surface.close") {
+    const identity = sanitized as { workspace_id: string; pane_id?: string; surface_id: string };
+    if (identity.workspace_id !== request.params.workspace_id || (request.method === "surface.create"
+      ? identity.pane_id !== request.params.pane_id : identity.surface_id !== request.params.surface_id)) throw new RpcValidationError("invalid_cmux_response");
+  }
+  return sanitized;
 }
 
 export function createWebSocketHandler(dependencies: WebSocketDependencies) {
   return {
     open(ws: ServerWebSocket<WSData>) {
-      const onStateChange = (connected: boolean) =>
+      const onStateChange = (connected: boolean) => {
+        if (!connected) ws.data.connectionGeneration++;
         sendState(ws, connected ? "connected" : "disconnected");
+      };
       const cmux = dependencies.createCmuxClient
         ? dependencies.createCmuxClient(onStateChange)
         : new CmuxClient({
@@ -135,6 +193,7 @@ export function createWebSocketHandler(dependencies: WebSocketDependencies) {
             onStateChange,
           });
       ws.data.cmux = cmux;
+      ws.data.metadata = new CmuxClient({ socketPath: dependencies.config.socketPath, socketPassword: dependencies.config.socketPassword, requestTimeoutMs: 1000, maxPending: 1 });
       ws.data.unsubscribeEvents = dependencies.eventStream.subscribe((change) =>
         sendJson(ws, {
           type: "event",
@@ -166,14 +225,15 @@ export function createWebSocketHandler(dependencies: WebSocketDependencies) {
         let result: unknown;
         if (
           request.method === "surface.send_text" ||
-          request.method === "surface.send_key"
+          request.method === "surface.send_key" || request.method === "surface.create" || request.method === "surface.close"
         ) {
           if (ws.data.inputQueued >= 64) {
             throw new RpcValidationError("busy");
           }
           ws.data.inputQueued += 1;
+          const generation = ws.data.connectionGeneration;
           const operation = ws.data.inputTail.then(() => {
-            if (ws.data.closed) {
+            if (ws.data.closed || generation !== ws.data.connectionGeneration) {
               throw new CmuxRequestError("bridge_disconnected");
             }
             return dispatch(ws.data, request);
@@ -201,6 +261,8 @@ export function createWebSocketHandler(dependencies: WebSocketDependencies) {
     async close(ws: ServerWebSocket<WSData>, _code: number, _reason: string) {
       if (ws.data.closed) return;
       ws.data.closed = true;
+      ws.data.metadata?.disconnect();
+      ws.data.metadata = null;
       ws.data.unsubscribeEvents?.();
       ws.data.unsubscribeEvents = null;
       await ws.data.inputTail;

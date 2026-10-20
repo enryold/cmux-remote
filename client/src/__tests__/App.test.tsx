@@ -2,6 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { App } from "../App";
 import type { CmuxApi } from "../hooks/useCmux";
 import { snapshotWithTwoWorkspaces, terminalA } from "../test/topology-fixture";
@@ -46,6 +47,8 @@ function cmuxApi(): CmuxApi {
     readText: vi.fn().mockResolvedValue("ready"),
     sendText: vi.fn().mockResolvedValue(undefined),
     sendKey: vi.fn().mockResolvedValue(undefined),
+    createSurface: vi.fn(),
+    closeSurface: vi.fn(),
     reportViewport: vi.fn().mockResolvedValue(undefined),
     clearViewport: vi.fn().mockResolvedValue(undefined),
   };
@@ -55,6 +58,97 @@ beforeEach(() => {
   history.replaceState(null, "", "/");
   mocks.useAuth.mockReturnValue(auth);
   mocks.useCmux.mockReturnValue(cmuxApi());
+});
+
+function inactiveTree() {
+  const tree = structuredClone(snapshotWithTwoWorkspaces);
+  const workspace = tree.workspaces[0];
+  if (!workspace?.panes[0]) throw new Error("missing fixture");
+  workspace.activity = { observedAt: Date.now(), lastActivityAt: null, unreadCount: 0 };
+  workspace.panes[0].surfaces.push({ id: "99999999-9999-4999-8999-999999999999", title: "Old browser", type: "browser", selected: false, index: 3, urlLabel: null });
+  return tree;
+}
+
+it("confirms bulk closing once, targets only captured inactive tabs and skips a newly working tab", async () => {
+  const api = cmuxApi(); api.tree = inactiveTree();
+  const updated = structuredClone(api.tree);
+  const ui = updated.workspaces[0]?.panes[0]?.surfaces.find((surface) => surface.title === "UI Agent");
+  if (!ui) throw new Error("missing fixture");
+  ui.agent = { source: "test_agent", state: "working" };
+  vi.mocked(api.refreshTree).mockResolvedValue(updated).mockResolvedValueOnce(api.tree);
+  vi.mocked(api.closeSurface).mockResolvedValue(undefined);
+  mocks.useCmux.mockReturnValue(api);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<App />);
+  fireEvent.click(screen.getByText("Inactive tabs (3)"));
+  fireEvent.click(screen.getByRole("button", { name: "Chiudi tutti i tab inattivi in CODEX" }));
+  await waitFor(() => expect(api.closeSurface).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(api.closeSurface).mock.calls).toEqual([
+    ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+    ["aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "99999999-9999-4999-8999-999999999999"],
+  ]);
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(confirm.mock.calls[0]?.[0]).toContain("3 inactive tabs");
+  confirm.mockRestore();
+});
+
+it.each([false, true])("does not replay bulk closes after cancellation or an uncertain result (confirmed=%s)", async (confirmed) => {
+  const api = cmuxApi(); api.tree = inactiveTree();
+  vi.mocked(api.refreshTree).mockResolvedValue(api.tree);
+  vi.mocked(api.closeSurface).mockRejectedValue(new Error("rpc_timeout"));
+  mocks.useCmux.mockReturnValue(api);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(confirmed);
+  render(<App />);
+  fireEvent.click(screen.getByText("Inactive tabs (3)"));
+  fireEvent.click(screen.getByRole("button", { name: "Chiudi tutti i tab inattivi in CODEX" }));
+  if (confirmed) await screen.findByRole("alert");
+  expect(api.closeSurface).toHaveBeenCalledTimes(confirmed ? 1 : 0);
+  confirm.mockRestore();
+});
+
+it("enters the exact newly created terminal immediately after discovery publishes it", async () => {
+  const api = cmuxApi();
+  const surfaceId = "99999999-9999-4999-8999-999999999999";
+  const createdTree = structuredClone(snapshotWithTwoWorkspaces);
+  createdTree.workspaces[0]?.panes[0]?.surfaces.push({ id: surfaceId, title: "Created terminal", type: "terminal", index: 3, selected: false, urlLabel: null });
+  vi.mocked(api.createSurface).mockResolvedValue(surfaceId);
+  mocks.useCmux.mockImplementation(() => {
+    const [tree, setTree] = useState(snapshotWithTwoWorkspaces);
+    return { ...api, tree, refreshTree: async () => { setTree(createdTree); return createdTree; } };
+  });
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "New terminal in CODEX" }));
+  await waitFor(() => expect(screen.getByText("Created terminal").closest("header")).not.toBeNull());
+  expect(history.state).toEqual({ surfaceId });
+  expect(mocks.terminal.mock.calls[mocks.terminal.mock.calls.length - 1]?.[0]).toMatchObject({ surfaceId });
+  expect(api.createSurface).toHaveBeenCalledOnce();
+});
+
+it("explains an outdated bridge and lets the user dismiss the notice without retrying creation", async () => {
+  const api = cmuxApi();
+  vi.mocked(api.createSurface).mockRejectedValue(new Error("unsupported_method"));
+  vi.mocked(api.refreshTree).mockResolvedValue(snapshotWithTwoWorkspaces);
+  mocks.useCmux.mockReturnValue(api);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "New terminal in CODEX" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("Restart the bridge, then reload the app.");
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(api.createSurface).toHaveBeenCalledOnce();
+});
+
+it("clears an unconfirmed creation notice when navigating to an existing terminal", async () => {
+  const api = cmuxApi();
+  vi.mocked(api.createSurface).mockRejectedValue(new Error("rpc_timeout"));
+  vi.mocked(api.refreshTree).mockResolvedValue(snapshotWithTwoWorkspaces);
+  mocks.useCmux.mockReturnValue(api);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "New terminal in CODEX" }));
+  expect((await screen.findByRole("alert")).textContent).toContain("Check the tabs before trying again.");
+  fireEvent.click(screen.getByRole("button", { name: "API Agent" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(api.createSurface).toHaveBeenCalledOnce();
 });
 
 afterEach(() => {

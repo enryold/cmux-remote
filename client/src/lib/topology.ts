@@ -1,15 +1,18 @@
-import type { TreeSnapshot } from "./cmux-rpc";
+import type { AgentActivity, TreeSnapshot, WorkspaceActivity } from "./cmux-rpc";
 
 export interface SurfaceWorkspace {
   id: string;
   title: string;
-  surfaces: Array<{ id: string; title: string; selected: boolean; type: string; urlLabel: string | null }>;
+  paneId: string | null;
+  activity?: WorkspaceActivity;
+  surfaces: Array<{ id: string; title: string; selected: boolean; type: string; urlLabel: string | null; paneId: string; agent?: AgentActivity; hasUnread?: boolean }>;
 }
 export function previewSurfaceWorkspaces(tree: TreeSnapshot): SurfaceWorkspace[] {
   return [...tree.workspaces].sort((a, b) => a.index - b.index).map((workspace) => ({
-    id: workspace.id, title: workspace.title,
+    id: workspace.id, title: workspace.title, activity: workspace.activity,
+    paneId: (workspace.panes.find((pane) => pane.focused) ?? [...workspace.panes].sort((a, b) => a.index - b.index)[0])?.id ?? null,
     surfaces: [...workspace.panes].sort((a, b) => a.index - b.index).flatMap((pane) => [...pane.surfaces]
-      .sort((a, b) => a.index - b.index).map(({ id, title, selected, type, urlLabel }) => ({ id, title, selected, type, urlLabel }))),
+      .sort((a, b) => a.index - b.index).map(({ id, title, selected, type, urlLabel, agent, hasUnread }) => ({ id, title, selected, type, urlLabel, agent, hasUnread, paneId: pane.id }))),
   }));
 }
 

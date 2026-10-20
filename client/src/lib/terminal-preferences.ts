@@ -27,7 +27,7 @@ export const PREFERENCES_STORAGE_KEY = "cmux-remote.preferences.v2";
 const encoder = new TextEncoder();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function defaultTerminalPreferences(): TerminalPreferences {
-  return { version: 1, fontSize: 13, commands: [], favorites: (["escape", "tab", "left", "right", "up", "down", "shift+left", "enter"] as AllowedKey[]).map((key) => ({ kind: "key", key })) };
+  return { version: 1, fontSize: 12, commands: [], favorites: (["escape", "tab", "left", "right", "up", "down", "shift+left", "enter"] as AllowedKey[]).map((key) => ({ kind: "key", key })) };
 }
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

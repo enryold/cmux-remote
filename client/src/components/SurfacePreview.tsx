@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { PreviewStatus } from "../hooks/useSurfacePreview";
 import type { SurfacePreview as Preview } from "../lib/surface-preview";
-export function SurfacePreview({ preview, status, refresh }: { preview: Preview | null; status: PreviewStatus; refresh(): void }) {
+export function SurfacePreview({ preview, status, refresh, nativeImage = false }: { preview: Preview | null; status: PreviewStatus; refresh(): void; nativeImage?: boolean }) {
   const [zoom, setZoom] = useState(100);
   return (
     <main className="preview-page">
@@ -23,7 +23,7 @@ export function SurfacePreview({ preview, status, refresh }: { preview: Preview 
         {preview?.kind === "image" ? <img alt="Surface capture" draggable={false} src={`data:${preview.mime};base64,${preview.base64}`} style={{ width: `${preview.width * zoom / 100}px`, height: `${preview.height * zoom / 100}px` }} /> : null}
         {preview?.kind === "markdown" ? <pre>{preview.text}</pre> : null}
       </section>
-      <p className="preview-note">Read-only capture. Zoom and pan affect this device.</p>
+      <p className="preview-note">{nativeImage ? "Image thumbnail, up to 1024 px. " : "Read-only capture. "}Zoom and pan affect this device.</p>
     </main>
   );
 }

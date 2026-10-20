@@ -1,3 +1,5 @@
+import { enrichDashboard } from "./dashboard";
+
 export type AllowedKey =
   | "escape"
   | "tab"
@@ -21,6 +23,8 @@ export type AllowedRequest =
       params: Record<string, never>;
     }
   | { id: string; method: "system.tree"; params: Record<string, never> }
+  | { id: string; method: "surface.create"; params: { workspace_id: string; pane_id: string } }
+  | { id: string; method: "surface.close"; params: { workspace_id: string; surface_id: string; confirmed: true } }
   | {
       id: string;
       method: "surface.read_text";
@@ -53,12 +57,15 @@ export type AllowedRequest =
           };
     };
 
+export interface AgentActivity { source: string | null; state: "working" | "needs_attention" | "idle" | "unknown" }
+export interface WorkspaceActivity { observedAt: number; lastActivityAt: number | null; unreadCount: number }
 export interface TreeSnapshot {
   workspaces: Array<{
     id: string;
     title: string;
     index: number;
     selected: boolean;
+    activity?: WorkspaceActivity;
     panes: Array<{
       id: string;
       index: number;
@@ -70,6 +77,8 @@ export interface TreeSnapshot {
         index: number;
         selected: boolean;
         urlLabel: string | null;
+        agent?: AgentActivity;
+        hasUnread?: boolean;
       }>;
     }>;
   }>;
@@ -189,6 +198,15 @@ export function parseAllowedRequest(raw: string): AllowedRequest {
     };
   }
 
+  if (method === "surface.create") {
+    if (!exactKeys(params, ["workspace_id", "pane_id"])) fail("invalid_params");
+    return { id, method, params: { workspace_id: uuid(params.workspace_id), pane_id: uuid(params.pane_id) } };
+  }
+  if (method === "surface.close") {
+    if (!exactKeys(params, ["workspace_id", "surface_id", "confirmed"]) || params.confirmed !== true) fail("invalid_params");
+    return { id, method, params: { workspace_id: uuid(params.workspace_id), surface_id: uuid(params.surface_id), confirmed: true } };
+  }
+
   if (method === "surface.send_text") {
     if (!exactKeys(params, ["surface_id", "text"])) fail("invalid_params");
     if (
@@ -284,6 +302,10 @@ export function toCmuxCall(
     case "surface.send_text":
     case "surface.send_key":
       return { method: request.method, params: { ...request.params } };
+    case "surface.create":
+      return { method: request.method, params: { ...request.params, type: "terminal", focus: false } };
+    case "surface.close":
+      return { method: request.method, params: { workspace_id: request.params.workspace_id, surface_id: request.params.surface_id, force: true } };
     case "terminal.viewport":
       return {
         method: request.method,
@@ -398,12 +420,23 @@ function sanitizeViewport(value: unknown) {
 export function sanitizeCmuxResult(
   method: AllowedRequest["method"],
   result: unknown,
+  metadata?: unknown,
+  notifications?: unknown,
 ): unknown {
   switch (method) {
     case "system.capabilities":
       return sanitizeCapabilities(result);
     case "system.tree":
-      return sanitizeTree(result);
+      return enrichDashboard(sanitizeTree(result), metadata, notifications);
+    case "surface.create": {
+      const value = cmuxRecord(result);
+      if (value.type !== "terminal") fail("invalid_cmux_response");
+      return { workspace_id: uuid(value.workspace_id, "invalid_cmux_response"), pane_id: uuid(value.pane_id, "invalid_cmux_response"), surface_id: uuid(value.surface_id, "invalid_cmux_response") };
+    }
+    case "surface.close": {
+      const value = cmuxRecord(result);
+      return { workspace_id: uuid(value.workspace_id, "invalid_cmux_response"), surface_id: uuid(value.surface_id, "invalid_cmux_response") };
+    }
     case "surface.read_text":
       return {
         text: trailingUtf8Bytes(

@@ -4,6 +4,11 @@
 
 **Status:** approved after architecture assessment with Enrico
 
+**Implementation update — 2026-10-20:** the [cmux 0.65.2 follow-up](2026-10-20-native-images-agent-dashboard-tabs.md)
+governs native image thumbnails, the reassigned agent dashboard using structured mobile metadata,
+and user-authorized terminal tab creation/confirmed close. It supersedes the older dashboard CLI
+enrichment and no-tab-mutation restrictions below for this explicitly scoped work.
+
 **Version assignment update — 2026-10-04:** the agent dashboard described below as Milestone 2
 has been reassigned to Milestone 3. The new Milestone 2 direction covers
 [mobile terminal usability](2026-10-04-mobile-terminal-usability-design.md) and

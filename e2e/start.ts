@@ -11,6 +11,9 @@ const fake = await startFakeCmux();
 const controls = Bun.serve({ hostname: "127.0.0.1", port: 3458, fetch(request) {
   const path = new URL(request.url).pathname;
   if (path === "/calls" && request.method === "GET") return Response.json(fake.calls);
+  if (request.method === "POST" && /^\/features\/(reset|attention|unsupported|ambiguous|last|create-failed)$/.test(path)) {
+    fake.configureFeatures(path.split("/")[2] as "reset" | "attention" | "unsupported" | "ambiguous" | "last" | "create-failed"); return new Response(null, { status: 204 });
+  }
   if (request.method === "POST" && (path === "/uploads/fail" || path === "/uploads/reset")) {
     fake.configureUploads(path === "/uploads/fail"); return new Response(null, { status: 204 });
   }

@@ -21,11 +21,13 @@ Rows are historical and are never deleted when work ships or is removed.
 | Device-bound Tailscale pairing | Allow one Tailscale-authorized iPhone to pair once with a short code while preserving the application session boundary. | [Spec](specs/2026-09-14-device-bound-pairing-design.md) | 2026-09-14 | 2026-09-14 | 2026-09-14 | — |
 | Guided first-run setup | Select one iPhone, generate local pairing configuration and a narrow Tailscale grant, configure Serve safely, and start the bridge without exposing its signing key. | [Spec](specs/2026-09-14-guided-first-run-setup-design.md) | 2026-09-14 | 2026-09-14 | — | — |
 | Login startup and bounded process retries | Start the bridge in the Mac user session and retry up to three failed exits. | [Spec](specs/2026-09-16-login-autostart-design.md) | 2026-09-16 | — | — | — |
-| Milestone 3 — Agent dashboard | Enrich live surfaces with activity, previews, notifications, and conservative Codex/Claude lifecycle state. Reassigned from Milestone 2 on 2026-10-04. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
+| Milestone 3 — Agent dashboard | Structured agent state, workspace activity, notification bells, counts and inactive-tab grouping; reassigned from Milestone 2 on 2026-10-04. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md), [0.65.2 update](specs/2026-10-20-native-images-agent-dashboard-tabs.md) | 2026-09-13 | — | — | — |
 | Browser awareness — original Milestone 3 scope | Historical metadata-only direction; the user-confirmed Milestone 2 preview direction now includes browser discovery. | [Spec](specs/2026-09-13-cmux-remote-command-center-design.md) | 2026-09-13 | — | — | — |
 | Milestone 2 — Mobile terminal usability | Configurable keys and saved commands, toolbar favorites, reliable Enter/scrolling, and local font size. | [Spec](specs/2026-10-04-mobile-terminal-usability-design.md) | 2026-10-04 | 2026-10-04 | — | — |
 | Milestone 2 — Browser screenshots | Read-only exact-panel captures with Refresh and local zoom/pan. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | 2026-10-04 | — | — |
-| Milestone 2 — Native Markdown/image previews | Read-only content from already-open native panels; blocked by the installed cmux content-read contract. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
+| Milestone 2 — Native Markdown/image previews | Original content reads remain blocked on cmux 0.65.2; image thumbnails are tracked separately below. | [Spec](specs/2026-10-04-surface-content-previews-design.md) | 2026-10-04 | — | — | — |
+| Milestone 2 — Native image thumbnails | Exact-panel PNG/JPEG/WebP previews as validated JPEG thumbnails up to 1024 px. | [Spec](specs/2026-10-20-native-images-agent-dashboard-tabs.md) | 2026-10-20 | — | — | — |
+| Terminal tab creation and confirmed close | Create a terminal in an explicit existing pane; confirm individual or inactive-group closure and preserve last-tab protection. | [Spec](specs/2026-10-20-native-images-agent-dashboard-tabs.md) | 2026-10-20 | — | — | — |
 | Terminal file/image attachments | Upload phone files and photos to the Mac and review their references in the selected terminal composer before Send. | [Spec](specs/2026-10-05-terminal-attachments-design.md) | 2026-10-05 | 2026-10-05 | — | — |
 
 ## Version reassignment — 2026-10-04
@@ -53,3 +55,14 @@ dates remain unverified until target Mac/iPhone PWA acceptance. Governing artifa
   [implementation plan](plans/2026-10-04-mobile-terminal-usability.md).
 - Content previews: [design](specs/2026-10-04-surface-content-previews-design.md) and
   [implementation plan](plans/2026-10-04-surface-content-previews.md).
+
+## cmux 0.65.2 follow-up — 2026-10-20
+
+The user authorized native image thumbnails, the agent dashboard, create/close controls and E2E
+tests. Disposable-panel probes verified callable native stat/thumbnail, `mobile.workspace.list`
+descriptors, exact-pane terminal creation, confirmed close and last-surface protection. The local
+socket still rejects native fetch and mobile event subscriptions. The follow-up uses structured
+mobile metadata rather than the historical CLI session enrichment. Markdown and full-resolution
+native content remain blocked. See the [governing update](specs/2026-10-20-native-images-agent-dashboard-tabs.md)
+and [implementation record](plans/2026-10-20-native-images-agent-dashboard-tabs.md).
+The new work is local and has no verified merge or target-iPhone acceptance date.

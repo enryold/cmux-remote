@@ -1,6 +1,6 @@
 # cmux-remote Engineering Guide
 
-**Last reviewed: 2026-09-14**
+**Last reviewed: 2026-10-20**
 
 cmux-remote is a mobile command center for cmux terminal surfaces. cmux remains the primary work
 environment; this repository must not grow into a web IDE, generic SSH service, file manager, Git
@@ -53,8 +53,14 @@ cmux Unix socket
 - `docs/superpowers/`: product lifecycle, approved specifications, and implementation plans.
 
 Topology events refresh discovery. Only the selected terminal is read, using adaptive polling while
-output streaming is unavailable. Browser surfaces are discovered but are not remotely controlled in
-Milestone 1.
+output streaming is unavailable. Structured mobile metadata enriches the dashboard through a separate
+bounded socket; absent, ambiguous, disconnected or expired evidence degrades to unknown. Browser
+surfaces have read-only screenshots; saved native images use authorized JPEG thumbnails. Markdown
+reads remain unavailable on the verified cmux 0.65.2 socket.
+
+After a successful plain read of the selected running terminal, a bounded full `terminal.replay`
+grid may provide explicit colors/emphasis. Emit generated SGR only; never proxy raw VT/OSC or terminal
+modes. Invalid, unavailable or slow color capture must preserve the plain-text path.
 
 ## Security invariants
 
@@ -69,6 +75,11 @@ convenience:
   and WebSocket upgrade.
 - Keep browser-facing RPCs as an explicit, validated whitelist. Never expose an arbitrary cmux RPC,
   CLI command, shell spawn, or browser-control proxy.
+- Terminal creation permits only explicit current workspace/pane UUIDs and fixed type/focus options;
+  close requires an explicit current workspace/surface and user confirmation. Keep cmux last-surface
+  protection and never retry or replay a mutation after uncertain acknowledgement or reconnect.
+- Native preview paths come only from verified server-side panel descriptors and must be rechecked
+  after capture. Never accept file paths from the PWA or fall back to generic filesystem reads.
 - Bound all client-controlled strings, read sizes, queue sizes, and socket frames.
 - Do not cache authentication, API, WebSocket, or terminal data in the service worker.
 - Prefer documented cmux APIs. Verify the installed CLI/socket contract before adopting recent or
@@ -138,6 +149,9 @@ any viewport override when the check ends.
 - Keep changes small and separable enough for an upstream pull request.
 - Reuse existing helpers and platform behavior before adding dependencies or abstractions.
 - Do not hardcode workspace names, surface counts, device IPs, origins, or agent brands.
+  Exception approved on 2026-10-20: structured `codex` and `claude_code` sources select the user's
+  fixed question-key placement. Unknown sources retain saved favorites; never infer identity from
+  titles/output or restrict catalogue availability by brand.
 - Do not add Codex- or Claude-specific output parsers in Milestone 1. Future status adapters must
   degrade safely to `unknown`.
 - Do not begin browser-surface control until terminal discovery, output, input, and reconnect remain

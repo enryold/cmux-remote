@@ -1,0 +1,96 @@
+import { expect, test } from "@playwright/test";
+import { login } from "./helpers";
+const control = "http://127.0.0.1:3458";
+test.beforeEach(async ({ request }) => { await request.post(`${control}/features/reset`); });
+test.afterEach(async ({ request }) => { await request.post(`${control}/features/reset`); });
+
+test("offers bulk close only in the expanded group and closes exactly its inactive tabs after confirmation", async ({ page, request }) => {
+  await login(page);
+  const workspace = page.locator(".workspace-group").filter({ has: page.getByRole("heading", { name: "CODEX", exact: true }) });
+  const group = workspace.locator("details");
+  const close = group.getByRole("button", { name: "Chiudi tutti i tab inattivi in CODEX" });
+  await expect(close).toBeHidden();
+  await group.locator("summary").click();
+  await expect(close).toBeVisible();
+  const expectedIds = await group.locator(".terminal-row").evaluateAll((rows) => rows.map((row) => row.getAttribute("aria-label")));
+  const protectedNames = await workspace.locator(":scope > .terminal-list .terminal-row").evaluateAll((rows) => rows.map((row) => row.getAttribute("aria-label")));
+  const action = await close.boundingBox(); const bounds = await group.boundingBox();
+  expect(Math.abs((action?.x ?? 0) + (action?.width ?? 0) - (bounds?.x ?? 0) - (bounds?.width ?? 0))).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: test.info().outputPath("inactive-close-all.png") });
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await close.click();
+  let calls = await (await request.get(`${control}/calls`)).json();
+  expect(calls.filter((call: { method: string }) => call.method === "surface.close")).toHaveLength(0);
+  page.once("dialog", (dialog) => { expect(dialog.message()).toContain(`${expectedIds.length} inactive tabs`); void dialog.accept(); });
+  await close.click();
+  await expect(group).toHaveCount(0);
+  for (const name of protectedNames) await expect(workspace.getByRole("button", { name: name ?? "", exact: true })).toBeVisible();
+  for (const name of expectedIds) await expect(workspace.getByRole("button", { name: name ?? "", exact: true })).toHaveCount(0);
+  calls = await (await request.get(`${control}/calls`)).json();
+  const closes = calls.filter((call: { method: string }) => call.method === "surface.close");
+  expect(closes).toHaveLength(expectedIds.length);
+  expect(new Set(closes.map((call: { surfaceId: string }) => call.surfaceId)).size).toBe(expectedIds.length);
+  expect(closes.every((call: { workspaceId: string; force: boolean }) => call.workspaceId === "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" && call.force === true)).toBe(true);
+});
+
+test("uses a circled-plus button and dismisses or clears failed creation notices without replay", async ({ page, request }) => {
+  await request.post(`${control}/features/create-failed`);
+  await login(page);
+  const create = page.getByRole("button", { name: "New terminal in CODEX", exact: true });
+  await expect(create).toHaveText("");
+  await expect(create.locator("svg circle")).toHaveCount(1);
+  await expect(create).toBeInViewport();
+  await create.click();
+  await expect(page.getByRole("alert")).toContainText("Restart the bridge, then reload the app.");
+  await page.screenshot({ path: test.info().outputPath("creation-notice.png") });
+  await page.getByRole("button", { name: "Dismiss notice", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  let calls = await (await request.get(`${control}/calls`)).json();
+  expect(calls.filter((call: { method: string }) => call.method === "surface.create")).toHaveLength(1);
+  await create.click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "API Agent", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New terminal", exact: true }).locator("svg circle")).toHaveCount(1);
+  calls = await (await request.get(`${control}/calls`)).json();
+  expect(calls.filter((call: { method: string }) => call.method === "surface.create")).toHaveLength(2);
+});
+
+test("creates an exact-pane terminal once, preserves it over reconnect, and confirms close", async ({ page, context, request }) => {
+  await page.setViewportSize({ width: 393, height: 852 });
+  await login(page);
+  await page.getByRole("button", { name: "New terminal in CODEX", exact: true }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Terminal 1");
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("created terminal ready");
+  await expect(page.getByRole("button", { name: "Close tab", exact: true })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "New terminal", exact: true })).toBeInViewport();
+  await context.setOffline(true);
+  await expect(page.getByText("Disconnected", { exact: true })).toBeVisible();
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("pageshow")));
+  await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("button", { name: "Close tab", exact: true }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Terminal 1");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Close tab", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Surfaces" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Terminal 1", exact: true })).toHaveCount(0);
+  const calls = await (await request.get(`${control}/calls`)).json();
+  const creates = calls.filter((call: { method: string }) => call.method === "surface.create");
+  expect(creates).toHaveLength(1);
+  expect(creates[0]).toMatchObject({ workspaceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", paneId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", focus: false });
+  expect(calls.filter((call: { method: string }) => call.method === "surface.close")).toHaveLength(1);
+});
+
+test("keeps cmux's last tab open and creates from the selected tab", async ({ page, request }) => {
+  await request.post(`${control}/features/last`);
+  await login(page);
+  await page.getByRole("button", { name: "API Agent", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Close tab", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveText("cmux keeps the last tab open. Create another terminal first.");
+  await page.getByRole("button", { name: "New terminal", exact: true }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Terminal 1");
+  await expect(page.locator(".xterm-accessibility-tree")).toContainText("created terminal ready");
+});

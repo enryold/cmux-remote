@@ -2,17 +2,6 @@ import type { AllowedKey } from "./cmux-rpc";
 
 export type TerminalInput = { kind: "text"; text: string } | { kind: "key"; key: AllowedKey };
 export type SubmitResult = "accepted" | "text_unconfirmed" | "enter_unconfirmed";
-const sequences: Record<string, AllowedKey> = {
-  "\r": "enter", "\n": "enter", "\r\n": "enter", "\u001b": "escape", "\t": "tab",
-  "\u0003": "ctrl+c", "\u0004": "ctrl+d", "\u001b[Z": "shift+tab",
-  "\u001b[A": "up", "\u001b[B": "down", "\u001b[C": "right", "\u001b[D": "left",
-  "\u001bOA": "up", "\u001bOB": "down", "\u001bOC": "right", "\u001bOD": "left",
-  "\u001b[1;2A": "shift+up", "\u001b[1;2B": "shift+down", "\u001b[1;2C": "shift+right", "\u001b[1;2D": "shift+left",
-};
-export function normalizeTerminalInput(data: string, context: { composing: boolean; paste: boolean }): TerminalInput {
-  const key = !context.composing && !context.paste ? sequences[data] : undefined;
-  return key ? { kind: "key", key } : { kind: "text", text: data };
-}
 export function createTerminalInputDispatcher(deps: {
   sendText(surfaceId: string, text: string): Promise<void>;
   sendKey(surfaceId: string, key: AllowedKey): Promise<void>;

@@ -8,6 +8,7 @@ import { validateAttachment } from "../lib/attachments";
 
 interface TerminalToolbarProps {
   connected: boolean;
+  agentSource?: string | null;
   settings: ReturnType<typeof useTerminalPreferences>;
   onKey(key: AllowedKey): void;
   onSubmit(text: string): Promise<SubmitResult>;
@@ -15,7 +16,9 @@ interface TerminalToolbarProps {
   connectionGeneration?: number;
   onUpload?(file: File, signal: AbortSignal): Promise<string>;
 }
-export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest, connectionGeneration = 0, onUpload }: TerminalToolbarProps) {
+export function TerminalToolbar({ connected, agentSource, settings, onKey, onSubmit, onLatest, connectionGeneration = 0, onUpload }: TerminalToolbarProps) {
+  const questionKeys: AllowedKey[] = agentSource === "codex" ? ["shift+left", "enter", "escape"]
+    : agentSource === "claude_code" ? ["up", "down", "enter", "escape"] : [];
   const [text, setText] = useState("");
   const textRef = useRef("");
   const changeText = (value: string) => { textRef.current = value; setText(value); };
@@ -96,29 +99,35 @@ export function TerminalToolbar({ connected, settings, onKey, onSubmit, onLatest
         {onUpload ? <>
           <input ref={picker} aria-label="Files and images" type="file" multiple hidden
             onChange={(event) => { const files = Array.from(event.target.files ?? []); event.target.value = ""; void attach(files); }} />
-          <button aria-label="Attach files or images" disabled={!connected || busy} type="button" onClick={() => picker.current?.click()}>📎</button>
+          <button aria-label="Attach files or images" title="Attach files or images" disabled={!connected || busy} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => picker.current?.click()}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" /></svg></button>
         </> : null}
-        <input aria-label="Prompt or command" autoCapitalize="none" autoComplete="off" autoCorrect="off"
-          disabled={submitting} enterKeyHint="send" maxLength={4096}
+        <textarea aria-label="Prompt or command" autoCapitalize="none" autoComplete="off" autoCorrect="on"
+          disabled={submitting} enterKeyHint="send" maxLength={4096} rows={3}
           onChange={(event) => changeText(event.target.value)}
           onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.nativeEvent.isComposing || composing.current || event.keyCode === 229) return;
+            if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing || composing.current || event.keyCode === 229) return;
             event.preventDefault(); void submit();
-          }} placeholder="Prompt or command" spellCheck={false} type="text" value={text} />
-        <button disabled={!connected || busy} type="submit">Send</button>
+          }} placeholder="Prompt or command" spellCheck={true} value={text} />
+        {/* Keep draft focus until click without cancelling touch gestures. */}
+        <button aria-label="Send" title="Send" disabled={!connected || busy} type="submit" onMouseDown={(event) => event.preventDefault()}><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5m-6 6 6-6 6 6" /></svg></button>
       </form>
       <nav aria-label="Terminal shortcuts" className="terminal-toolbar">
         <button ref={menuButton} type="button" onClick={() => setMenuOpen(true)}>Shortcuts</button>
-        <button type="button" onClick={onLatest}>Latest</button>
-        {settings.preferences.favorites.map((shortcut) => {
-          const label = shortcut.kind === "key" ? KEY_SHORTCUTS.find((item) => item.key === shortcut.key)?.label : settings.preferences.commands.find((item) => item.id === shortcut.commandId)?.label;
-          return label ? <button type="button" key={shortcutId(shortcut)} disabled={!connected || busy} aria-label={label} onClick={() => void invoke(shortcut)}>{label}</button> : null;
-        })}
+        <div className="toolbar-favorites">
+          <button type="button" onClick={onLatest}>Latest</button>
+          {settings.preferences.favorites.filter((shortcut) => shortcut.kind !== "key" || !questionKeys.includes(shortcut.key)).map((shortcut) => {
+            const label = shortcut.kind === "key" ? KEY_SHORTCUTS.find((item) => item.key === shortcut.key)?.label : settings.preferences.commands.find((item) => item.id === shortcut.commandId)?.label;
+            return label ? <button type="button" key={shortcutId(shortcut)} disabled={!connected || busy} aria-label={label} onClick={() => void invoke(shortcut)}>{label}</button> : null;
+          })}
+        </div>
+        {questionKeys.length ? <fieldset aria-label="Question controls" className="question-controls">
+          {questionKeys.map((key) => <button type="button" key={key} disabled={!connected || busy} onClick={() => void invoke({ kind: "key", key })}>{KEY_SHORTCUTS.find((item) => item.key === key)?.label}</button>)}
+        </fieldset> : null}
       </nav>
       {uploadNotice ? <p className="attachment-notice" role="status">{uploadNotice}</p> : null}
       {uploadError ? <p className="input-error" role="alert">{uploadError}</p> : null}
-      {menuOpen ? <ShortcutMenu settings={settings} connected={connected} busy={busy} submissionWarning={commandError} returnFocus={menuButton.current} onInvoke={(shortcut) => void invoke(shortcut)} onClose={() => setMenuOpen(false)} /> : null}
+      {menuOpen ? <ShortcutMenu settings={settings} connected={connected} busy={busy} questionKeys={questionKeys} submissionWarning={commandError} returnFocus={menuButton.current} onInvoke={(shortcut) => void invoke(shortcut)} onClose={() => setMenuOpen(false)} /> : null}
     </div>
   );
 }

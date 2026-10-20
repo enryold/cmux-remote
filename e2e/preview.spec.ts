@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { login } from "./helpers";
+import { expandInactiveTabs, login } from "./helpers";
 const control = "http://127.0.0.1:3458";
 test.beforeEach(async ({ request }) => { await request.post(`${control}/reset`); });
 
 test("views browser captures, zooms locally, refreshes and isolates terminal input", async ({ page, request }) => {
-  await login(page);
+  await login(page); await expandInactiveTabs(page);
   await expect(page.getByText("Browser · https://preview.example", { exact: true })).toBeVisible();
   await expect(page.getByText(/password|private\?token|fragment/)).toHaveCount(0);
   await page.getByRole("button", { name: "Browser preview", exact: true }).click();
@@ -29,7 +29,7 @@ test("views browser captures, zooms locally, refreshes and isolates terminal inp
   await expect(page.locator(".xterm-accessibility-tree")).toContainText("api ready");
 });
 test("marks failed refresh stale and returns on panel closure", async ({ page, request }) => {
-  await login(page); await page.getByRole("button", { name: "Browser preview" }).click();
+  await login(page); await expandInactiveTabs(page); await page.getByRole("button", { name: "Browser preview" }).click();
   await expect(page.getByRole("img")).toBeVisible();
   await request.post(`${control}/fail`);
   await page.getByRole("button", { name: "Refresh" }).click();
@@ -40,7 +40,7 @@ test("marks failed refresh stale and returns on panel closure", async ({ page, r
   await expect(page.getByRole("img")).toHaveCount(0);
 });
 test("clears capture on disconnect, reconnects, and expires auth", async ({ page, context }) => {
-  await login(page); await page.getByRole("button", { name: "Browser preview" }).click();
+  await login(page); await expandInactiveTabs(page); await page.getByRole("button", { name: "Browser preview" }).click();
   await expect(page.getByRole("img")).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByText("Disconnected", { exact: true })).toBeVisible();
@@ -54,12 +54,34 @@ test("clears capture on disconnect, reconnects, and expires auth", async ({ page
   await expect(page.getByText("Session expired", { exact: true })).toBeVisible();
   await expect(page.getByRole("img")).toHaveCount(0);
 });
-test("shows native and unknown panels as unavailable without terminal controls", async ({ page }) => {
-  await login(page);
-  for (const title of ["Plan.md", "Image.png", "Other panel"]) {
+test("shows Markdown and unknown panels as unavailable without terminal controls", async ({ page }) => {
+  await login(page); await expandInactiveTabs(page);
+  for (const title of ["Plan.md", "Other panel"]) {
+    await expandInactiveTabs(page);
     await page.getByRole("button", { name: title, exact: true }).click();
     await expect(page.getByText(/Preview unavailable/)).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Prompt or command" })).toHaveCount(0);
     await page.getByRole("button", { name: "Back" }).click();
   }
+});
+
+test("views exact native image thumbnails with local zoom and no file paths", async ({ page, request }) => {
+  const bodies: string[] = [];
+  page.on("response", (response) => { if (response.url().includes("/preview")) void response.text().then((text) => bodies.push(text)); });
+  await login(page); await expandInactiveTabs(page);
+  await page.getByRole("button", { name: "Image.png", exact: true }).click();
+  const image = page.getByRole("img", { name: "Surface capture" });
+  await expect(image).toBeVisible();
+  await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBe(96);
+  await expect(page.getByText(/Image thumbnail, up to 1024 px/)).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("native-preview.png") });
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(page.getByText("125%", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByText("Capturing preview…")).toHaveCount(0);
+  expect(bodies.join(" ")).not.toMatch(/file_path|private\/redacted/);
+  const calls = await (await request.get(`${control}/calls`)).json();
+  expect(calls.some((call: { method: string }) => call.method === "mobile.panel.artifact.thumbnail")).toBe(true);
+  expect(calls.some((call: { method: string }) => call.method === "mobile.panel.artifact.fetch")).toBe(false);
+  await expect(page.getByRole("textbox", { name: "Prompt or command" })).toHaveCount(0);
 });

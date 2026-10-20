@@ -5,11 +5,12 @@ const id = "11111111-1111-4111-8111-111111111111";
 describe("terminal preferences", () => {
   it("uses safe defaults and round trips commands and favorites", () => {
     const defaults = defaultTerminalPreferences();
-    expect(defaults.fontSize).toBe(13);
+    expect(defaults.fontSize).toBe(12);
     expect(defaults.commands).toEqual([]);
     expect(defaults.favorites).toContainEqual({ kind: "key", key: "shift+left" });
     expect(defaults.favorites).not.toContainEqual({ kind: "key", key: "ctrl+c" });
     expect(parseTerminalPreferences(null)).toEqual(defaults);
+    expect(parseTerminalPreferences(JSON.stringify({ ...defaults, fontSize: 13 })).fontSize).toBe(13);
     const saved = { ...defaults, fontSize: 24, commands: [{ id, label: "Start", text: "codex-dsp" }], favorites: [{ kind: "command", commandId: id }] };
     expect(parseTerminalPreferences(JSON.stringify(saved))).toEqual(saved);
   });

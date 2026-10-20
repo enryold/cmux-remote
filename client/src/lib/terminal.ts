@@ -1,7 +1,21 @@
-export function cleanTerminalSnapshot(content: string): string {
+const sgr = new RegExp(`(${String.fromCharCode(27)}\\[[0-9;]*m)`, "g");
+
+export function cleanTerminalSnapshot(content: string, columns?: number): string {
   return content
     .split("\n")
-    .map((line) => line.trimEnd())
+    .map((line) => {
+      const clean = line.trimEnd();
+      if (columns === undefined) return clean;
+      const plain = clean.replace(sgr, "");
+      if (plain.length <= columns || !/^ *([─━═_=-])\1{7,} *$/.test(plain)) return clean;
+      let remaining = columns;
+      return clean.split(sgr).map((part, index) => {
+        if (index % 2) return part;
+        const text = part.slice(0, remaining);
+        remaining -= text.length;
+        return text;
+      }).join("");
+    })
     .join("\n");
 }
 

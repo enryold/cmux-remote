@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { E2E_PAIRING_CODE } from "./helpers";
+import { E2E_PAIRING_CODE, expandInactiveTabs } from "./helpers";
 
 test("pairs once on iPhone and keeps the session after reload", async (
   { page },
@@ -16,7 +16,8 @@ test("pairs once on iPhone and keeps the session after reload", async (
   await page.getByLabel("Pairing code").fill(E2E_PAIRING_CODE);
   await page.getByRole("button", { name: "Pair" }).click();
   await expect(page.getByRole("button", { name: "API Agent" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "New terminal" })).toBeVisible();
+  await expandInactiveTabs(page);
+  await expect(page.getByRole("button", { name: "New terminal", exact: true })).toBeVisible();
   await expect(page.locator(".terminal-row")).toHaveCount(13);
 
   await page.reload();

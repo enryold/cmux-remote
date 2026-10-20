@@ -47,7 +47,7 @@ Key combinations come from an explicit catalogue. The initial catalogue is:
 
 Labels use familiar notation such as **Shift+←** and **Ctrl-C**. Ctrl-C has the description
 "Interrupt the current process"; Ctrl-D has "Send end of input; may close a shell". No agent-name
-or output parser determines when a shortcut is available. A shortcut expresses a key gesture,
+or output parser determines whether a shortcut is available. A shortcut expresses a key gesture,
 not a promise that an agent will open a specific menu.
 
 First-run favorites are Esc, Tab, Left, Right, Up, Down, Shift+Left, and Enter. Ctrl-C, Ctrl-D, and
@@ -56,6 +56,46 @@ behavior is preserved; the UI uses the catalogue instead of a separate modifier 
 Favorites can be removed or restored. Toolbar entries have at least 44×44 CSS-pixel touch targets
 and remain reachable through horizontal scrolling. The Shortcuts button remains available when no
 favorite is selected. Do not add drag-and-drop or an arbitrary keyboard-macro builder.
+
+User-approved follow-up, 2026-10-20: `mobile.workspace.list` source `codex` fixes Shift+Left,
+Enter and Esc at the toolbar's right edge below Send. Source `claude_code` fixes Up, Down, Enter
+and Esc there. Only these structured identities affect placement; unknown/unavailable source keeps
+the saved toolbar, and the full catalogue remains available. The Shortcuts opener stays at the left;
+remaining favorites scroll between it and the fixed group with no duplicates. Stored favorites are
+unchanged, and the sheet marks contextual keys as always visible rather than allowing their removal.
+No title/output parsing, agent commands or preference migration is introduced.
+
+Invoking a key never calls xterm.focus(): taps must not request the phone keyboard. Typing
+in the composer retains its normal focus behavior. The existing sheet uses the quiet dark
+palette, inset rounded edges, SVG actions and 44 px targets, preserving its focus trap, command editor,
+offline editing and unconfirmed-submission warning. Terminal output and controls have a 12 px side
+gutter or a larger device safe area; local fitting must still contain the final terminal row.
+
+User-approved color follow-up, 2026-10-20: preserve explicit foreground/background colors and text
+emphasis from the selected running terminal's full screen-anchored `cmux.render-grid.v1` capture.
+The bridge first performs the existing plain read; only a running terminal is eligible for the
+`terminal.replay` capture. Validate exact surface identity, format, full/screen anchor, dimensions,
+style IDs/colors/attributes, Unicode spans, non-overlapping cells, byte/row bounds and absence of
+controls. Generate SGR only for xterm's existing text path; never forward upstream VT/OSC, cursor
+replies, mode changes or metadata. Keep app defaults for default colors. A 500 ms capture deadline
+and unsupported/invalid capture fall back to the successful plain read. No additional browser-facing
+RPC, Mac resize, agent-specific parser or terminal-byte subscription is introduced.
+The [versioned upstream grid contract](https://github.com/manaflow-ai/cmux/blob/v0.65.2/Packages/Shared/CMUXMobileCore/Sources/CMUXMobileCore/MobileTerminalRenderGrid.swift)
+was checked against the installed 0.65.2 socket, including real foreground/background colors from a
+disposable, unfocused workspace that was closed after capture.
+
+User-requested padding correction, 2026-10-21: trim trailing blank cells before adding SGR, including
+whitespace-only colored spans. Validate every span, including discarded padding, for overlap and
+existing bounds. Preserve row separators, leading/interior spacing, text and styling. Desktop-wide
+prompt backgrounds must not create extra wrapped rows on the phone. Do not hide a prompt or choice
+by matching an agent brand, title or output string; the Mac terminal remains unchanged.
+
+User-requested separator correction, 2026-10-21: fit standalone horizontal rules to the local xterm
+column count, preserving their existing SGR styling. Only a row consisting of one repeated horizontal
+glyph (`─`, `━`, `═`, `_`, `-` or `=`; at least eight characters), with optional surrounding spaces,
+qualifies. Leave text-bearing lines and table corners intact. Recalculate from the raw snapshot after
+local fit, rotation or font changes so a previously shortened rule can expand again. Apply the same
+rule to styled and plain fallback output; no agent detection, remote resize or new RPC is involved.
 
 A command consists of an ID, a label, and one line of literal shell input. Examples in documentation
 may use `codex-dsp` and `claude-dsp`; product defaults contain no agent-specific commands. The user
@@ -87,7 +127,7 @@ interface TerminalPreferences {
 Limits: 20 commands, 12 favorites, 40 Unicode code points per label, 4,096 UTF-8 bytes per command,
 and 131,072 UTF-8 bytes for the serialized preference document. IDs are UUIDs. Duplicate favorites,
 duplicate IDs, unknown keys, and dangling command references are invalid. Deleting a command also
-removes its favorite. Fonts are integer pixels from 10 through 24, default 13, step 1.
+removes its favorite. Fonts are integer pixels from 10 through 24, default 12, step 1.
 
 Use defaults when the stored document is malformed or belongs to an unsupported version. A denied
 or exhausted storage backend leaves editing usable in memory and shows "Preferences could not be
@@ -96,7 +136,7 @@ is introduced. Do not store sessions, pairing data, output, or invocation histor
 
 ## Input and Return semantics
 
-Maintain a single client input dispatcher shared by direct typing, the composer, menu entries, and
+Maintain a single client input dispatcher shared by the composer, menu entries, and
 favorites. It captures the surface UUID and the current connection generation before sending.
 It serializes whole composer/command submissions with other local input, so text and its Enter
 cannot be interleaved by another gesture in the same PWA. Bound queued actions to 64.
@@ -112,10 +152,27 @@ For an unconfirmed text stage, show "Input was not confirmed. Check the terminal
 again." For an empty-composer Enter failure, show "Enter was not confirmed. Check the terminal
 before trying again." Do not claim text was sent when the action contained no text.
 
-Normalize complete xterm key events to named keys. A committed Return sends `enter`, not a carriage
-return embedded in `surface.send_text`. Exact supported arrow/modifier sequences can map to catalogue
-keys. Pasted text and IME composition must remain text; do not split multi-line paste into submit
-actions or parse agent prose. Unrecognized data keeps the current bounded text-input behavior.
+User-chosen follow-up, 2026-10-20: draft all text locally in the composer, then send it on Return
+or Send. The output is read-only (`disableStdin`, read-only helper textarea, `inputmode=none`) so
+taps do not invoke a second typing path or request the phone keyboard. Remove the unused xterm
+`onData` handler, its composition/paste listeners and raw-input decoder. Preserve selection/copy,
+touch scrolling, live colors and immediate named-key shortcuts. Do not add predictive terminal echo
+or a second input-mode setting. Composer paste/IME remains local; a committed Return sends text
+followed by a genuine named Enter. Remote output must not steal composer focus or publish its draft.
+
+User-approved follow-up, 2026-10-20: the composer becomes a three-row textarea with soft wrapping,
+internal scrolling for longer drafts and 16 px text. Shift+Return inserts a newline; ordinary
+Return/Send preserves the whole-text-then-Enter submission and IME/duplicate-action guards. While
+focus is within the composer, hide the shortcut strip and connection footer; restore them on blur,
+without discarding the draft. Keep attachment/Send accessible, error messages visible and bottom
+safe-area spacing when the footer is hidden. Use CSS focus state rather than keyboard-size guesses
+or viewport listeners, preserving the standalone iPhone full-height fix. Verify focused/blurred
+layout, safe areas, narrow/landscape screens and exact multiline dispatch in both browser engines.
+Include attachment/Send button focus so the controls cannot move away between pointer down and up.
+User-requested follow-up, 2026-10-21: enable native autocorrection and spellchecking in the prompt
+so the phone can offer keyboard suggestions according to its system settings. Keep native form
+history autofill disabled; this does not control keyboard predictions. Saved-command editing stays
+literal. No extra writing service or input mode is introduced.
 
 The composer handles iPhone Return, hardware Return, and the Send button through the same submission
 function. While composing, Return commits composition without submitting. Guard against duplicate
@@ -157,6 +214,18 @@ and font. Do not automatically send `terminal.viewport` overrides from the mobil
 after the user observed the Mac terminal resizing to the phone's grid. This supersedes the original
 debounced `terminal.viewport` behavior. The bridge retains its validated viewport contract and
 disconnect cleanup for older clients.
+
+**Mobile density update — 2026-10-20:** the user requested less prominent terminal controls and a
+slightly smaller font. The default is now 12 px; keep valid saved sizes unchanged. Composer actions
+use 18 px SVG icons and fixed 44 px touch areas; shortcut labels use 12 px with quiet backgrounds.
+Keep the prompt input at 16 px to avoid iPhone focus zoom. Browser views retain `100dvh`; installed
+iPhone PWAs use a `100vh` fallback through all root containers, preserving safe-area padding.
+WebKit's installed-PWA height bugs require physical iPhone confirmation; no emulator result alone
+establishes the user's iOS 26.6.2 bottom gap is fixed. Keep keyboard sizing CSS-based and do not
+reintroduce remote terminal resizing.
+The user confirmed the page reaches the bottom after reopening on iOS 26.6.2. Show connection
+status only once, centered on both axes in the footer; omit the duplicate beside Surfaces. Include
+the bottom safe area in the footer's height rather than asymmetric padding beneath its text.
 
 ## Boundaries and verification
 

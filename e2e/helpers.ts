@@ -30,3 +30,10 @@ export async function login(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("heading", { name: "Surfaces" }).waitFor();
 }
+
+export async function expandInactiveTabs(page: Page): Promise<void> {
+  await page.locator(".inactive-tabs > summary").first().waitFor();
+  for (const group of await page.locator(".inactive-tabs").all()) {
+    if (await group.getAttribute("open") === null) await group.locator("summary").click();
+  }
+}

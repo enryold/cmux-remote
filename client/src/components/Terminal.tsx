@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { AllowedKey } from "../lib/cmux-rpc";
-import { normalizeTerminalInput, type SubmitResult, type TerminalInput } from "../lib/terminal-input";
+import type { SubmitResult } from "../lib/terminal-input";
 import {
   cleanTerminalSnapshot,
   snapshotUpdate,
@@ -17,8 +17,8 @@ interface TerminalProps {
   stale: boolean;
   viewportEnabled: boolean;
   connected: boolean;
+  agentSource?: string | null;
   settings: ReturnType<typeof useTerminalPreferences>;
-  onInput(input: TerminalInput): void;
   onKey(key: AllowedKey): void;
   onSubmit(text: string): Promise<SubmitResult>;
   connectionGeneration?: number;
@@ -42,7 +42,7 @@ export function Terminal(props: TerminalProps) {
     const term = new XTerm({
       convertEol: true,
       cursorBlink: true,
-      disableStdin: false,
+      disableStdin: true,
       fontFamily: "Menlo, Monaco, 'Courier New', monospace",
       fontSize: callbacksRef.current.settings.preferences.fontSize,
       screenReaderMode: true,
@@ -91,20 +91,12 @@ export function Terminal(props: TerminalProps) {
           }
           term.scrollToLine(found < 0 ? 0 : found + Math.floor(offset / term.cols));
         }
+        applySnapshot(callbacksRef.current.content);
       });
     };
     refitRef.current = scheduleFit;
-    let composing = false;
-    let pasting = false;
-    const startComposition = () => { composing = true; };
-    const endComposition = () => { queueMicrotask(() => { composing = false; }); };
-    const paste = () => { pasting = true; queueMicrotask(() => { pasting = false; }); };
-    container.addEventListener("compositionstart", startComposition);
-    container.addEventListener("compositionend", endComposition);
-    container.addEventListener("paste", paste, true);
-
     const applySnapshot = (raw: string) => {
-      const next = cleanTerminalSnapshot(raw);
+      const next = cleanTerminalSnapshot(raw, term.cols);
       pending = next;
       flushSnapshot();
     };
@@ -152,9 +144,6 @@ export function Terminal(props: TerminalProps) {
     container.addEventListener("wheel", onWheel, { passive: true });
     applySnapshotRef.current = applySnapshot;
 
-    term.onData((data) => {
-      callbacksRef.current.onInput(normalizeTerminalInput(data, { composing, paste: pasting }));
-    });
     term.onSelectionChange(() => {
       if (!term.hasSelection()) flushSnapshot();
     });
@@ -170,6 +159,11 @@ export function Terminal(props: TerminalProps) {
     });
 
     term.open(container);
+    if (term.textarea) {
+      term.textarea.readOnly = true;
+      term.textarea.inputMode = "none";
+      term.textarea.tabIndex = -1;
+    }
     fit.fit();
     termRef.current = term;
     const resizeObserver = new ResizeObserver(scheduleFit);
@@ -182,9 +176,6 @@ export function Terminal(props: TerminalProps) {
       container.removeEventListener("touchend", endTouch);
       container.removeEventListener("touchcancel", endTouch);
       container.removeEventListener("wheel", onWheel);
-      container.removeEventListener("compositionstart", startComposition);
-      container.removeEventListener("compositionend", endComposition);
-      container.removeEventListener("paste", paste, true);
       resizeObserver.disconnect();
       if (resizeTimer !== null) clearTimeout(resizeTimer);
       if (callbacksRef.current.viewportEnabled) {
@@ -207,12 +198,6 @@ export function Terminal(props: TerminalProps) {
     refitRef.current();
   }, [fontSize]);
 
-  const focus = () => termRef.current?.focus();
-  const sendKey = (key: AllowedKey) => {
-    callbacksRef.current.onKey(key);
-    focus();
-  };
-
   return (
     <main className="terminal-page">
       {props.stale ? (
@@ -227,8 +212,9 @@ export function Terminal(props: TerminalProps) {
       />
       <TerminalToolbar
         connected={props.connected}
+        agentSource={props.agentSource}
         settings={props.settings}
-        onKey={sendKey}
+        onKey={props.onKey}
         onSubmit={props.onSubmit}
         connectionGeneration={props.connectionGeneration}
         onUpload={props.onUpload}

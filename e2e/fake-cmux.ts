@@ -3,6 +3,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { PREVIEW_IMAGE } from "./preview-image";
+import { NATIVE_THUMBNAIL } from "../server/src/__tests__/native-preview-fixture";
+import { paddedTerminalGridFixture, ruledTerminalGridFixture, terminalGridFixture } from "../server/src/__tests__/terminal-grid-fixture";
 
 interface RequestFrame {
   id: string;
@@ -12,9 +14,10 @@ interface RequestFrame {
 
 export interface FakeCmuxControl {
   socketPath: string;
-  calls: Array<{ method: string; surfaceId: unknown; workspaceId: unknown }>;
+  calls: Array<{ method: string; surfaceId: unknown; workspaceId: unknown; paneId?: unknown; focus?: unknown; force?: unknown }>;
   configurePreview(action: "reset" | "fail" | "close"): void;
   configureUploads(fail: boolean): void;
+  configureFeatures(action: "reset" | "attention" | "unsupported" | "ambiguous" | "last" | "create-failed"): void;
   close(): Promise<void>;
 }
 
@@ -27,6 +30,7 @@ const SHELL_SURFACE = "66666666-6666-4666-8666-666666666666";
 const BACKEND_SURFACE = "77777777-7777-4777-8777-777777777777";
 const LOGS_SURFACE = "88888888-8888-4888-8888-888888888888";
 const WORKER_SURFACE = "12121212-1212-4212-8212-121212121212";
+const valueWindow = "99999999-9999-4999-8999-999999999999";
 
 export async function startFakeCmux(): Promise<FakeCmuxControl> {
   const directory = await mkdtemp(join(tmpdir(), "cmux-remote-e2e-"));
@@ -44,6 +48,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
     [LOGS_SURFACE, "logs ready\n"],
     [WORKER_SURFACE, "worker ready\n"],
   ]);
+  const initialOutputs = new Map(outputs);
   let newSurfaceVisible = false;
   let eventTimer: ReturnType<typeof setTimeout> | null = null;
   const calls: FakeCmuxControl["calls"] = [];
@@ -53,8 +58,14 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   const questions = new Map<string, number>();
   const uploads = new Map<string, { operation: string; name: string; total: number; received: number }>();
   let uploadFailure = false;
+  let dashboardMode = "normal";
+  let lastOnly = false;
+  const createdSurfaces = new Map<string, { workspaceId: string; paneId: string; title: string }>();
+  const closedSurfaces = new Set<string>();
+  let createdCount = 0;
+  const coloredSurfaces = new Map<string, ReturnType<typeof terminalGridFixture>>();
 
-  const tree = () => ({
+  const baseTree = () => ({
     windows: [
       {
         id: "99999999-9999-4999-8999-999999999999",
@@ -172,6 +183,19 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
     ],
   });
 
+  const tree = () => {
+    const value = baseTree();
+    for (const workspace of value.windows.flatMap((window) => window.workspaces)) {
+      for (const pane of workspace.panes) {
+        pane.surfaces = pane.surfaces.filter((surface) => !closedSurfaces.has(surface.id) && (!lastOnly || workspace.index !== 0 || surface.id === API_SURFACE));
+        for (const [id, created] of createdSurfaces) {
+          if (created.workspaceId === workspace.id && created.paneId === pane.id) pane.surfaces.push({ id, type: "terminal", title: created.title, index: pane.surfaces.length, selected: false });
+        }
+      }
+    }
+    return value;
+  };
+
   const send = (socket: Socket, frame: unknown) => {
     socket.write(`${JSON.stringify(frame)}\n`);
   };
@@ -183,7 +207,7 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
   };
 
   const handle = (request: RequestFrame, socket: Socket) => {
-    calls.push({ method: request.method, surfaceId: request.params.surface_id, workspaceId: request.params.workspace_id });
+    calls.push({ method: request.method, surfaceId: request.params.surface_id, workspaceId: request.params.workspace_id, paneId: request.params.pane_id, focus: request.params.focus, force: request.params.force });
     if (request.method === "auth.login") {
       if (request.params.password === "e2e-cmux-password") {
         reply(socket, request.id, { authenticated: true });
@@ -205,6 +229,57 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
     }
     if (request.method === "system.tree") {
       reply(socket, request.id, tree());
+      return;
+    }
+    if (request.method === "mobile.workspace.list") {
+      if (dashboardMode === "unsupported") { fail(socket, request.id, "method_not_found"); return; }
+      const workspaces = tree().windows.flatMap((window) => window.workspaces).map((workspace) => {
+        const surfaces = workspace.panes.flatMap((pane) => pane.surfaces);
+        const terminals = surfaces.filter((surface) => surface.type === "terminal").map((surface) => ({ id: surface.id.toUpperCase(), title: surface.title, current_directory: "/private/redacted", is_ready: true, is_focused: surface.selected,
+          agent_source: surface.id === API_SURFACE ? "codex" : surface.id === UI_SURFACE ? "claude_code" : null,
+          agent_state: surface.id === API_SURFACE ? dashboardMode === "attention" ? "Needs input" : "Running" : surface.id === UI_SURFACE ? "Idle" : null }));
+        if (dashboardMode === "ambiguous" && workspace.index === 0 && terminals[0]) terminals.push({ ...terminals[0] });
+        return { id: workspace.id.toUpperCase(), title: workspace.title, window_id: valueWindow, is_selected: workspace.selected,
+          description: null, description_truncated: false, group_id: null, custom_color: null, is_pinned: false,
+          current_directory: "/private/redacted", last_activity_at: Date.now() / 1000 - 90, preview_at: Date.now() / 1000 - 90,
+          preview: dashboardMode === "attention" && workspace.index === 0 ? "\x1b[33mApproval\x1b[0m\nneeded" : null,
+          unread_count: dashboardMode === "attention" && workspace.index === 0 ? 2 : 0, has_unread: dashboardMode === "attention" && workspace.index === 0,
+          terminals, simulators: [], surfaces: surfaces.map((surface) => ({ surface_id: surface.id.toUpperCase(), kind: surface.type === "filepreview" ? "filePreview" : surface.type,
+            title: surface.title, is_focused: surface.selected, file_path: surface.type === "filepreview" ? "/private/redacted/image.png" : surface.type === "markdown" ? "/private/redacted/plan.md" : null })) };
+      });
+      reply(socket, request.id, { workspaces, groups: [] }); return;
+    }
+    if (request.method === "notification.list") {
+      reply(socket, request.id, { notifications: dashboardMode === "attention" ? [
+        { id: "16161616-1616-4616-8616-161616161616", workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", workspace_ref: "workspace:1", surface_id: SERVER_SURFACE, surface_ref: "surface:2", is_read: false, created_at: new Date().toISOString(), title: "Agent update", subtitle: "", body: "Approval needed", tab_title: "Dev server" },
+        { id: "17171717-1717-4717-8717-171717171717", workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", surface_id: TESTS_SURFACE, is_read: true, body: "Old message" },
+      ] : [] }); return;
+    }
+    if (request.method === "mobile.panel.artifact.stat" || request.method === "mobile.panel.artifact.thumbnail") {
+      if (request.params.workspace_id !== "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" || request.params.surface_id !== "14141414-1414-4414-8414-141414141414" || request.params.path !== "/private/redacted/image.png") { fail(socket, request.id, "not_found"); return; }
+      reply(socket, request.id, request.method.endsWith("stat") ? { exists: true, is_directory: false, size: 157, modified_at: 1792522710, kind: "image", mime_type: "image/png" } : NATIVE_THUMBNAIL); return;
+    }
+    if (request.method === "surface.create") {
+      if (dashboardMode === "create-failed") { fail(socket, request.id, "unsupported_method"); return; }
+      const owner = tree().windows.flatMap((window) => window.workspaces).find((workspace) => workspace.id === request.params.workspace_id);
+      const pane = owner?.panes.find((pane) => pane.id === request.params.pane_id);
+      if (!owner || !pane || request.params.type !== "terminal" || request.params.focus !== false || Object.keys(request.params).length !== 4) { fail(socket, request.id, "invalid_params"); return; }
+      const id = crypto.randomUUID(); const title = `Terminal ${++createdCount}`;
+      createdSurfaces.set(id, { workspaceId: owner.id, paneId: pane.id, title }); outputs.set(id, "created terminal ready\n");
+      reply(socket, request.id, { workspace_id: owner.id.toUpperCase(), workspace_ref: "workspace:1", pane_id: pane.id.toUpperCase(), pane_ref: "pane:1", surface_id: id.toUpperCase(), surface_ref: "surface:100", type: "terminal", window_id: valueWindow, window_ref: "window:1" });
+      for (const eventSocket of eventSockets) send(eventSocket, { type: "event", seq: ++eventSequence, name: "surface.created" });
+      return;
+    }
+    if (request.method === "surface.close") {
+      const owner = tree().windows.flatMap((window) => window.workspaces).find((workspace) => workspace.id === request.params.workspace_id);
+      const surfaces = owner?.panes.flatMap((pane) => pane.surfaces) ?? [];
+      const target = surfaces.find((surface) => surface.id === request.params.surface_id);
+      if (!owner || !target) { fail(socket, request.id, "not_found"); return; }
+      if (surfaces.length === 1) { fail(socket, request.id, "invalid_state"); return; }
+      if (request.params.force !== true) { fail(socket, request.id, "confirmation_required"); return; }
+      closedSurfaces.add(target.id); createdSurfaces.delete(target.id); outputs.delete(target.id);
+      reply(socket, request.id, { workspace_id: owner.id.toUpperCase(), workspace_ref: "workspace:1", surface_id: target.id.toUpperCase(), surface_ref: "surface:100", window_id: valueWindow, window_ref: "window:1" });
+      for (const eventSocket of eventSockets) send(eventSocket, { type: "event", seq: ++eventSequence, name: "surface.closed" });
       return;
     }
     if (request.method === "mobile.task.attachment.upload") {
@@ -233,6 +308,12 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
       else reply(socket, request.id, { workspace_id: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", workspace_ref: "workspace:1", surface_id: "DDDDDDDD-DDDD-4DDD-8DDD-DDDDDDDDDDDD", surface_ref: "surface:2", png_base64: PREVIEW_IMAGE, path: "/private/redacted/preview.png", url: "file:///private/redacted/preview.png" });
       return;
     }
+    if (request.method === "terminal.replay") {
+      const surface = request.params.surface_id;
+      if (typeof surface === "string" && outputs.has(surface) && coloredSurfaces.has(surface) && dashboardMode !== "unsupported") reply(socket, request.id, coloredSurfaces.get(surface));
+      else fail(socket, request.id, "method_not_found");
+      return;
+    }
     if (request.method === "surface.read_text") {
       const surface = request.params.surface_id;
       if (typeof surface !== "string" || !outputs.has(surface)) {
@@ -246,8 +327,11 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
       if (typeof surface !== "string" || typeof text !== "string" || !outputs.has(surface)) {
         fail(socket, request.id, "invalid_params");
       } else {
-        if (text === "fixture:question") { questions.set(surface, 0); outputs.set(surface, "Open choices with Shift+Left\n"); }
-        else if (text === "fixture:scroll") outputs.set(surface, Array.from({ length: 2000 }, (_, i) => `history ${i}`).join("\n"));
+        if (text === "fixture:ruled-prompt") { coloredSurfaces.set(surface, ruledTerminalGridFixture(surface)); outputs.set(surface, `previous output\n+ added output 日本語 👋\n${"─".repeat(181)}\n› Write a prompt\n${"─".repeat(181)}\nReady\n  1. Continue    2. Cancel`); }
+        else if (text === "fixture:padded-prompt") { coloredSurfaces.set(surface, paddedTerminalGridFixture(surface)); outputs.set(surface, "previous output\n+ added output 日本語 👋\n\n› Write a prompt\n\nReady\n  1. Continue    2. Cancel"); }
+        else if (text === "fixture:colors") { coloredSurfaces.set(surface, terminalGridFixture(surface)); outputs.set(surface, "previous output\n- removed line\n+ added line\n日本語 👋\n"); }
+        else if (text === "fixture:question") { coloredSurfaces.delete(surface); questions.set(surface, 0); outputs.set(surface, "Open choices with Shift+Left\n"); }
+        else if (text === "fixture:scroll") { coloredSurfaces.delete(surface); outputs.set(surface, Array.from({ length: 2000 }, (_, i) => `history ${i}`).join("\n")); }
         else if (text === "fixture:append") outputs.set(surface, `${outputs.get(surface)}\n${Array.from({ length: 20 }, (_, i) => `latest append ${i}`).join("\n")}`);
         else if (text === "fixture:replace") outputs.set(surface, `${outputs.get(surface)?.split("\n").slice(0, -1).join("\n")}\nprompt replaced`);
         else outputs.set(surface, `${outputs.get(surface)}${text}`);
@@ -345,6 +429,17 @@ export async function startFakeCmux(): Promise<FakeCmuxControl> {
     socketPath,
     calls,
     configureUploads(fail) { uploadFailure = fail; },
+    configureFeatures(action) {
+      if (action === "reset") {
+        dashboardMode = "normal"; lastOnly = false; createdCount = 0; closedSurfaces.clear(); coloredSurfaces.clear();
+        for (const id of createdSurfaces.keys()) outputs.delete(id);
+        createdSurfaces.clear();
+        for (const [id, text] of initialOutputs) if (!outputs.has(id)) outputs.set(id, text);
+        calls.length = 0;
+      } else if (action === "last") lastOnly = true;
+      else dashboardMode = action;
+      for (const socket of eventSockets) send(socket, { type: "event", seq: ++eventSequence, name: "workspace.renamed" });
+    },
     configurePreview(action) {
       if (action === "reset") { browserVisible = true; browserFailure = false; calls.length = 0; }
       else if (action === "fail") browserFailure = true;

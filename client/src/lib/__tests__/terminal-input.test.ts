@@ -1,16 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createTerminalInputDispatcher, normalizeTerminalInput } from "../terminal-input";
+import { createTerminalInputDispatcher } from "../terminal-input";
 
-const context = { composing: false, paste: false };
 const tick = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 describe("terminal input", () => {
-  it("normalizes committed keys but preserves paste, IME, and unknown data", () => {
-    expect(normalizeTerminalInput("\r", context)).toEqual({ kind: "key", key: "enter" });
-    expect(normalizeTerminalInput("\n", context)).toEqual({ kind: "key", key: "enter" });
-    expect(normalizeTerminalInput("\u001b[1;2D", context)).toEqual({ kind: "key", key: "shift+left" });
-    for (const value of ["hello", "hello\rworld", "\u001b[999~"]) expect(normalizeTerminalInput(value, context)).toEqual({ kind: "text", text: value });
-    for (const options of [{ composing: true, paste: false }, { composing: false, paste: true }]) expect(normalizeTerminalInput("\r", options)).toEqual({ kind: "text", text: "\r" });
-  });
   it("serializes a complete submission before later typing", async () => {
     let acknowledge!: () => void;
     const sendText = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { acknowledge = resolve; })).mockResolvedValue(undefined);
